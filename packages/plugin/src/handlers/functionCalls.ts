@@ -9,7 +9,10 @@ import { FunctionCallData, ActionResultPayload } from "../types"; // Use local t
 import { safeJsonParse, safeJsonStringify } from "../utils/jsonUtils";
 
 // Import specific action handlers
-import { handleCreateStickyNote } from "./figmaActions";
+import { 
+  handleCreateStickyNote, 
+  handleAnalyzeFigJamComponents 
+} from "./figmaActions";
 // Import other specific actions from figmaActions.ts if added
 
 // Import general Figma function handlers
@@ -34,6 +37,7 @@ const availableFunctions: Record<
 > = {
   // Functions from figmaActions (return ActionResultPayload object)
   createStickyNote: handleCreateStickyNote,
+  analyzeFigJamComponents: handleAnalyzeFigJamComponents,
   // Add other specific actions here, e.g., 'deleteNode': handleDeleteNode,
 
   // Functions from figmaFunctions (return stringified JSON)

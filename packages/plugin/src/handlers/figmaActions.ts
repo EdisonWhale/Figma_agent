@@ -166,5 +166,264 @@ export async function handleCreateStickyNote(
   }
 }
 
+/**
+ * Analyzes components in the current FigJam canvas.
+ * @param args - Parsed arguments from the AI function call.
+ * @returns Promise<ActionResultPayload> - Result object with component analysis.
+ */
+export async function handleAnalyzeFigJamComponents(
+  args: FunctionCallArguments
+): Promise<ActionResultPayload> {
+  console.log("[figmaActions] Handling analyzeFigJamComponents with args:", args);
+  if (figma.editorType !== "figjam") {
+    const errorMsg = "Analyze components action is only available in FigJam.";
+    console.warn(`[figmaActions] ${errorMsg}`);
+    return { success: false, error: errorMsg };
+  }
+
+  try {
+    // Extract and validate arguments with proper type assertions
+    const scope = typeof args.scope === "string" ? args.scope as "selection" | "viewport" | "page" : "viewport";
+    const includeText = args.includeText !== false; // default to true
+    const includeAttributes = args.includeAttributes !== false; // default to true
+    const includePositions = args.includePositions !== false; // default to true
+    const includeConnections = args.includeConnections !== false; // default to true
+    const maxDepth = typeof args.maxDepth === "number" ? args.maxDepth : -1; // default to unlimited
+    
+    console.log(`[figmaActions] Analyzing FigJam components with scope: ${scope}`);
+    
+    // Determine which nodes to analyze based on scope
+    let nodesToAnalyze: readonly SceneNode[] = [];
+    
+    switch (scope) {
+      case "selection":
+        nodesToAnalyze = figma.currentPage.selection;
+        if (nodesToAnalyze.length === 0) {
+          return {
+            success: true,
+            data: {
+              message: "No nodes are currently selected.",
+              components: []
+            }
+          };
+        }
+        break;
+        
+      case "viewport":
+        // Get nodes visible in the current viewport
+        const viewportNodes = figma.currentPage.findAll(node => {
+          if (!("absoluteBoundingBox" in node) || !node.absoluteBoundingBox) return false;
+          
+          const bounds = node.absoluteBoundingBox;
+          const viewport = figma.viewport.bounds;
+          
+          // Check if node is at least partially visible in viewport
+          return !(
+            bounds.x > viewport.x + viewport.width ||
+            bounds.y > viewport.y + viewport.height ||
+            bounds.x + bounds.width < viewport.x ||
+            bounds.y + bounds.height < viewport.y
+          );
+        });
+        nodesToAnalyze = viewportNodes as readonly SceneNode[];
+        break;
+        
+      case "page":
+      default:
+        nodesToAnalyze = figma.currentPage.children;
+        break;
+    }
+    
+    console.log(`[figmaActions] Found ${nodesToAnalyze.length} nodes to analyze`);
+    
+    // Analyze the nodes - create a mutable copy of the readonly array
+    const componentData = await analyzeNodes(
+      Array.from(nodesToAnalyze), 
+      includeText, 
+      includeAttributes, 
+      includePositions, 
+      includeConnections,
+      maxDepth
+    );
+    
+    return {
+      success: true,
+      data: {
+        message: `Analyzed ${componentData.length} components on the FigJam canvas.`,
+        scope: scope,
+        components: componentData
+      }
+    };
+  } catch (error) {
+    console.error("[figmaActions] Error in handleAnalyzeFigJamComponents:", error);
+    return {
+      success: false,
+      error: `Error analyzing FigJam components: ${
+        error instanceof Error ? error.message : "Unknown internal error"
+      }`,
+    };
+  }
+}
+
+/**
+ * Recursively analyzes nodes and their properties.
+ * @param nodes - Array of nodes to analyze
+ * @param includeText - Whether to include text content
+ * @param includeAttributes - Whether to include detailed attributes
+ * @param includePositions - Whether to include position information
+ * @param includeConnections - Whether to include connection relationships
+ * @param maxDepth - Maximum depth to traverse (-1 for unlimited)
+ * @param currentDepth - Current traversal depth (internal use)
+ * @returns Array of analyzed component data
+ */
+async function analyzeNodes(
+  nodes: SceneNode[],
+  includeText: boolean = true,
+  includeAttributes: boolean = true,
+  includePositions: boolean = true,
+  includeConnections: boolean = true,
+  maxDepth: number = -1,
+  currentDepth: number = 0
+): Promise<any[]> {
+  // If maximum depth reached and it's not unlimited (-1), stop recursion
+  if (maxDepth !== -1 && currentDepth > maxDepth) {
+    return [];
+  }
+
+  const results = [];
+  const connectionMap = new Map<string, Set<string>>();
+
+  // First pass: collect all nodes data and build connection map
+  for (const node of nodes) {
+    // Basic node information (always included)
+    const nodeData: any = {
+      id: node.id,
+      name: node.name,
+      type: node.type,
+    };
+
+    // Positions and dimensions (if requested)
+    if (includePositions) {
+      nodeData.position = {
+        x: node.x,
+        y: node.y,
+      };
+      
+      if ("width" in node && "height" in node) {
+        nodeData.size = {
+          width: node.width,
+          height: node.height,
+        };
+      }
+    }
+
+    // Include detailed attributes if requested
+    if (includeAttributes) {
+      // Different properties based on node type
+      if ("fills" in node && node.fills) {
+        const fills = Array.isArray(node.fills) ? node.fills : [node.fills];
+        nodeData.fills = fills.map(fill => {
+          if (fill.type === "SOLID") {
+            return {
+              type: "SOLID",
+              color: fill.color ? 
+                {r: fill.color.r, g: fill.color.g, b: fill.color.b} : 
+                undefined,
+              opacity: fill.opacity,
+              visible: fill.visible
+            };
+          }
+          return { type: fill.type };
+        });
+      }
+      
+      // Add other properties based on node type
+      switch (node.type) {
+        case "STICKY":
+          if ("authorVisible" in node) {
+            nodeData.authorVisible = node.authorVisible;
+          }
+          break;
+        case "SHAPE_WITH_TEXT":
+          if ("shapeType" in node) {
+            nodeData.shapeType = node.shapeType;
+          }
+          break;
+        case "CONNECTOR":
+          if ("connectorStart" in node && "connectorEnd" in node) {
+            // Safely handle connector endpoints without making assumptions about the type
+            nodeData.connector = {
+              // Basic connector info that should be safe regardless of endpoint type
+              strokeWeight: "strokeWeight" in node ? node.strokeWeight : undefined,
+            };
+            
+            // Safely try to extract connection info for the connection map
+            if (includeConnections) {
+              try {
+                // Try to access properties with type guards and safe typecasting
+                const startNode = (node.connectorStart as any).endpointNodeId;
+                const endNode = (node.connectorEnd as any).endpointNodeId;
+                
+                if (startNode && endNode) {
+                  // Add connection info to the connector data
+                  nodeData.connector.startNodeId = startNode;
+                  nodeData.connector.endNodeId = endNode;
+                  
+                  // Update connection map
+                  if (!connectionMap.has(startNode)) {
+                    connectionMap.set(startNode, new Set<string>());
+                  }
+                  connectionMap.get(startNode)!.add(endNode);
+                }
+              } catch (e) {
+                console.warn(`[figmaActions] Error extracting connector endpoints for node ${node.id}:`, e);
+              }
+            }
+          }
+          break;
+      }
+    }
+
+    // Include text content if requested and the node has it
+    if (includeText && "characters" in node && node.characters !== undefined) {
+      // Try to fetch text content safely
+      let textContent;
+      try {
+        textContent = node.characters;
+      } catch (e) {
+        textContent = "[Text content unavailable]";
+        console.warn(`[figmaActions] Couldn't get text content for node ${node.id}:`, e);
+      }
+      nodeData.text = textContent;
+    }
+
+    // Recursively process children if the node is a parent
+    if ("children" in node && node.children && node.children.length > 0) {
+      nodeData.children = await analyzeNodes(
+        Array.from(node.children), // Ensure we're working with a mutable copy
+        includeText,
+        includeAttributes,
+        includePositions,
+        includeConnections,
+        maxDepth,
+        currentDepth + 1
+      );
+    }
+
+    results.push(nodeData);
+  }
+
+  // Second pass: add connection relationships if requested
+  if (includeConnections && connectionMap.size > 0) {
+    for (const nodeData of results) {
+      if (connectionMap.has(nodeData.id)) {
+        nodeData.connectedTo = Array.from(connectionMap.get(nodeData.id)!);
+      }
+    }
+  }
+
+  return results;
+}
+
 // Add other specific action handlers here as needed, e.g.:
 // export async function handleDeleteNode(args: { nodeId: string }): Promise<ActionResultPayload> { ... }

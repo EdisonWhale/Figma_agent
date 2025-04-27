@@ -14,6 +14,12 @@ export interface FunctionCallArguments {
   color: string | null;
   relativeToNodeId: string | null;
   positionRelation: "RIGHT" | "LEFT" | "ABOVE" | "BELOW" | "NEAR" | null;
+  scope?: "selection" | "viewport" | "page";
+  includeText?: boolean;
+  includeAttributes?: boolean;
+  includePositions?: boolean;
+  includeConnections?: boolean;
+  maxDepth?: number;
 }
 
 export interface FunctionCall {
