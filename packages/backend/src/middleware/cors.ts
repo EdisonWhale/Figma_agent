@@ -14,7 +14,7 @@ export const corsMiddleware = (
   let allowedOrigin: string | undefined = undefined;
 
   if (origin) {
-    if (corsOptions.origin.includes(origin) || isDevMode) {
+    if (corsOptions.origin.includes(origin as any) || isDevMode) {
       allowedOrigin = origin;
     }
   } else if (isDevMode) {

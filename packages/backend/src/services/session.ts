@@ -1,8 +1,9 @@
 import { randomUUID } from "crypto";
-import { HistoryMessage, BackendChatMessage } from "../types";
+import { BackendChatMessage } from "../types/chat.types";
 import { logger } from "../utils/logger";
 
-export { HistoryMessage };
+// Type alias for backward compatibility
+export type HistoryMessage = BackendChatMessage;
 
 export interface SessionData {
   previousResponseId: string | null;

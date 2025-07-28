@@ -12,7 +12,8 @@ import { useCallback, useRef, useEffect } from "preact/hooks";
 import styles from "./ChatStyles.module.css";
 import { MessageBubble } from "./components/MessageBubble";
 import { ConnectionStatusIndicator } from "./components/ConnectionStatus";
-import { useChatConnection } from "./hooks/useChatConnection";
+import { useChatConnection } from "./hooks";
+import { CONNECTION_STATUS, DEFAULT_MESSAGES, KEYS } from "./constants";
 
 function Plugin() {
   const {
@@ -41,12 +42,12 @@ function Plugin() {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+      if (event.key === KEYS.ENTER && !event.shiftKey) {
         event.preventDefault();
         if (
           inputValue.trim() !== "" &&
           !isLoading &&
-          connectionStatus === "connected"
+          connectionStatus === CONNECTION_STATUS.CONNECTED
         ) {
           sendMessage();
         }
@@ -55,9 +56,11 @@ function Plugin() {
     [sendMessage, inputValue, isLoading, connectionStatus]
   );
 
-  const showInputArea = connectionStatus !== "error";
+  const showInputArea = connectionStatus !== CONNECTION_STATUS.ERROR;
   const isSendDisabled =
-    inputValue.trim() === "" || isLoading || connectionStatus !== "connected";
+    inputValue.trim() === "" ||
+    isLoading ||
+    connectionStatus !== CONNECTION_STATUS.CONNECTED;
 
   return (
     <div className={styles.pluginWrapper}>
@@ -67,10 +70,10 @@ function Plugin() {
         {/* Initial Prompt */}
         {messages.length === 0 &&
           !isLoading &&
-          connectionStatus !== "error" && (
+          connectionStatus !== CONNECTION_STATUS.ERROR && (
             <MiddleAlign>
               <Text className={styles.initialPrompt}>
-                Send a message to start chatting.
+                {DEFAULT_MESSAGES.INITIAL_PROMPT}
               </Text>
             </MiddleAlign>
           )}
@@ -110,14 +113,14 @@ function Plugin() {
           <textarea
             className={styles.textarea}
             placeholder={
-              connectionStatus === "connected"
-                ? "Send a message (Shift+Enter for newline)"
-                : "Connecting..."
+              connectionStatus === CONNECTION_STATUS.CONNECTED
+                ? DEFAULT_MESSAGES.PLACEHOLDER_CONNECTED
+                : DEFAULT_MESSAGES.PLACEHOLDER_CONNECTING
             }
             value={inputValue}
             onInput={handleInput}
             onKeyDown={handleKeyDown}
-            disabled={connectionStatus !== "connected"}
+            disabled={connectionStatus !== CONNECTION_STATUS.CONNECTED}
             rows={4}
           />
           <button

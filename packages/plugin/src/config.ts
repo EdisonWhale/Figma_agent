@@ -1,3 +1,5 @@
+import { WS_CONFIG } from "./constants";
+
 export type Environment = "development" | "production";
 
 // --- Configuration ---
@@ -12,10 +14,9 @@ const PROD_WS_URL = "wss://temp.com";
 export const config = {
   apiBaseUrl: IS_PRODUCTION_BUILD ? PROD_API_URL : DEV_API_URL,
   wsBaseUrl: IS_PRODUCTION_BUILD ? PROD_WS_URL : DEV_WS_URL,
-  // retryAttempts: 3, // Removed as api.ts is removed
-  reconnectMaxAttempts: 5,
-  reconnectInitialDelay: 1000,
-  reconnectMaxDelay: 30000,
+  reconnectMaxAttempts: WS_CONFIG.RECONNECT_MAX_ATTEMPTS,
+  reconnectInitialDelay: WS_CONFIG.RECONNECT_INITIAL_DELAY,
+  reconnectMaxDelay: WS_CONFIG.RECONNECT_MAX_DELAY,
 };
 
 console.log("[Plugin Config] Using Base URLs:", {

@@ -1,0 +1,203 @@
+/**
+ * Session Service
+ * Manages user sessions and chat history
+ */
+import { randomUUID } from "crypto";
+import { BackendChatMessage } from "../types/chat.types";
+import { logger } from "@utils/logger";
+import { SESSION_CONFIG } from "@constants/index";
+
+export interface SessionData {
+  previousResponseId: string | null;
+  chatHistory: BackendChatMessage[];
+  lastAccessed: number;
+}
+
+export class SessionService {
+  private sessions = new Map<string, SessionData>();
+  private cleanupInterval: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.setupSessionCleanup();
+  }
+
+  /**
+   * Get existing session or create a new one
+   */
+  public getOrCreateSession(requestedSessionId?: string): {
+    sessionId: string;
+    sessionData: SessionData;
+    isNewSession: boolean;
+  } {
+    let sessionId = requestedSessionId;
+    let isNewSession = false;
+    let sessionData: SessionData | undefined = undefined;
+
+    // Try to get existing session
+    if (sessionId) {
+      sessionData = this.sessions.get(sessionId);
+      if (sessionData && this.isSessionValid(sessionData)) {
+        sessionData.lastAccessed = Date.now();
+        logger.debug({ sessionId }, "[Session] Existing session retrieved");
+        return { sessionId, sessionData, isNewSession };
+      } else {
+        logger.debug(
+          { sessionId },
+          "[Session] Requested session invalid or expired"
+        );
+      }
+    }
+
+    // Create new session
+    sessionId = randomUUID();
+    sessionData = {
+      previousResponseId: null,
+      chatHistory: [],
+      lastAccessed: Date.now(),
+    };
+
+    this.sessions.set(sessionId, sessionData);
+    isNewSession = true;
+
+    logger.info({ sessionId }, "[Session] New session created");
+    return { sessionId, sessionData, isNewSession };
+  }
+
+  /**
+   * Update session with new response data
+   */
+  public updateSession(
+    sessionId: string,
+    responseId: string,
+    message: BackendChatMessage
+  ): void {
+    const sessionData = this.sessions.get(sessionId);
+    if (sessionData) {
+      sessionData.previousResponseId = responseId;
+      sessionData.chatHistory.push(message);
+      sessionData.lastAccessed = Date.now();
+
+      logger.trace(
+        { sessionId, historyLength: sessionData.chatHistory.length },
+        "[Session] Session updated"
+      );
+    } else {
+      logger.warn(
+        { sessionId },
+        "[Session] Attempted to update non-existent session"
+      );
+    }
+  }
+
+  /**
+   * Add message to session history
+   */
+  public addMessageToSession(
+    sessionId: string,
+    message: BackendChatMessage
+  ): void {
+    const sessionData = this.sessions.get(sessionId);
+    if (sessionData) {
+      sessionData.chatHistory.push(message);
+      sessionData.lastAccessed = Date.now();
+
+      logger.trace(
+        { sessionId, messageRole: message.role },
+        "[Session] Message added to session"
+      );
+    } else {
+      logger.warn(
+        { sessionId },
+        "[Session] Attempted to add message to non-existent session"
+      );
+    }
+  }
+
+  /**
+   * Get session data
+   */
+  public getSession(sessionId: string): SessionData | null {
+    const sessionData = this.sessions.get(sessionId);
+    if (sessionData && this.isSessionValid(sessionData)) {
+      sessionData.lastAccessed = Date.now();
+      return sessionData;
+    }
+    return null;
+  }
+
+  /**
+   * Delete session
+   */
+  public deleteSession(sessionId: string): boolean {
+    const deleted = this.sessions.delete(sessionId);
+    if (deleted) {
+      logger.info({ sessionId }, "[Session] Session deleted");
+    }
+    return deleted;
+  }
+
+  /**
+   * Get active session count
+   */
+  public getActiveSessionCount(): number {
+    return this.sessions.size;
+  }
+
+  /**
+   * Check if session is still valid
+   */
+  private isSessionValid(sessionData: SessionData): boolean {
+    const now = Date.now();
+    return now - sessionData.lastAccessed < SESSION_CONFIG.TTL;
+  }
+
+  /**
+   * Setup automatic session cleanup
+   */
+  private setupSessionCleanup(): void {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, SESSION_CONFIG.CLEANUP_INTERVAL);
+
+    logger.info(
+      {
+        intervalMs: SESSION_CONFIG.CLEANUP_INTERVAL,
+        ttlMs: SESSION_CONFIG.TTL,
+      },
+      "[Session] Cleanup task started"
+    );
+  }
+
+  /**
+   * Clean up expired sessions
+   */
+  private cleanupExpiredSessions(): void {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    for (const [sessionId, sessionData] of this.sessions.entries()) {
+      if (!this.isSessionValid(sessionData)) {
+        this.sessions.delete(sessionId);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      logger.info(
+        { cleanedCount, remainingCount: this.sessions.size },
+        "[Session] Expired sessions cleaned up"
+      );
+    }
+  }
+
+  /**
+   * Cleanup resources
+   */
+  public destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    this.sessions.clear();
+    logger.info({}, "[Session] Service destroyed");
+  }
+}

@@ -1,4 +1,4 @@
-import { ChatMessage } from "@common/types";
+import { ChatMessage } from "@common/index";
 
 export const SYSTEM_INSTRUCTION: ChatMessage = {
   role: "system", // Use 'system' role for Claude API

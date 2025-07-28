@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { ALLOWED_ORIGINS } from "@constants/index";
 
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -24,14 +25,7 @@ export const LOG_LEVEL =
 export const DEBUG_HEADERS = process.env.DEBUG_HEADERS === "true";
 
 export const corsOptions = {
-  origin: [
-    "https://www.figma.com",
-    "https://figma.com",
-    "https://www.figjam.com",
-    "https://figjam.com",
-    "http://localhost:3000", // Keep for local dev
-    "null", // Keep for local dev if needed
-  ],
+  origin: ALLOWED_ORIGINS,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,

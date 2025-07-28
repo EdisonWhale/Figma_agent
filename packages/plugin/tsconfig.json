@@ -6,9 +6,9 @@
     "jsxFactory": "h",
     "baseUrl": "../../",
     "paths": {
-      "common/*": ["packages/common/*"]
+      "common/*": ["packages/common/src/*"]
     }
   },
   "include": ["src/**/*", "../common/**/*"],
-  "lib": ["DOM", "ES2020"],
+  "lib": ["DOM", "ES2020"]
 }

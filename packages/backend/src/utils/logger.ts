@@ -1,5 +1,12 @@
 import { NODE_ENV, LOG_LEVEL } from "../config/index";
-import { LogEntry } from "../types";
+
+// Define LogEntry interface locally since it's only used here
+interface LogEntry {
+  level: string;
+  message: string;
+  timestamp: string;
+  data?: any;
+}
 
 type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 

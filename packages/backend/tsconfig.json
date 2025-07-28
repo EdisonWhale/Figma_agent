@@ -15,14 +15,16 @@
     "baseUrl": ".",
     "paths": {
       // Define paths relative to baseUrl
-      "@common/*": ["../common/*"],
+      "@common/*": ["../common/src/*"],
       "@config/*": ["./src/config/*"],
+      "@controllers/*": ["./src/controllers/*"],
       "@services/*": ["./src/services/*"],
       "@utils/*": ["./src/utils/*"],
       "@routes/*": ["./src/routes/*"],
       "@middleware/*": ["./src/middleware/*"],
       "@tools/*": ["./src/tools/*"],
-      "@types": ["./src/types"]
+      "@types": ["./src/types"],
+      "@constants/*": ["./src/constants/*"]
     },
     "sourceMap": true,
     "moduleResolution": "node",
