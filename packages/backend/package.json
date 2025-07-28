@@ -9,6 +9,7 @@
     "build": "tsc && tsc-alias"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.57.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",

@@ -105,7 +105,13 @@ export async function generateChatResponseStream(
       store: true,
     };
     if (toolsToUse && toolsToUse.length > 0) {
-      requestPayload.tools = toolsToUse;
+      requestPayload.tools = toolsToUse.map((tool) => ({
+        type: "function" as const,
+        name: tool.name,
+        description: tool.description,
+        strict: tool.strict ?? true,
+        parameters: tool.parameters,
+      }));
       requestPayload.tool_choice = "auto";
     }
 

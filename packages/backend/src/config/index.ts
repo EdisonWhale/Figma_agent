@@ -1,12 +1,21 @@
 import "dotenv/config";
 
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 if (!OPENAI_API_KEY) {
   console.warn("⚠️ WARNING: OPENAI_API_KEY environment variable is not set.");
 }
 
+if (!ANTHROPIC_API_KEY) {
+  console.warn(
+    "⚠️ WARNING: ANTHROPIC_API_KEY environment variable is not set."
+  );
+}
+
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-2025-04-14";
+export const ANTHROPIC_MODEL =
+  process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
 export const PORT = Number(process.env.PORT) || 3000;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const isDevMode = NODE_ENV === "development";

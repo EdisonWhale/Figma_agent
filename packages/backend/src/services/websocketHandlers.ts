@@ -13,7 +13,7 @@ import {
   FunctionCallOutputMessage,
   HistoryMessage,
 } from "./session";
-import { generateChatResponseStream, DetectedFunctionCall } from "./openai";
+import { generateChatResponseStream, DetectedFunctionCall } from "./claude";
 import { availableTools } from "@tools/index";
 import { ensureSystemInstruction } from "@config/ai";
 import { ChatMessage, InputMessage, BackendChatMessage } from "@types";
@@ -76,7 +76,7 @@ export async function handleChatMessage(
   // Add user message to conceptual history
   addMessageToHistory(sessionId, newUserMessage); // TRACE log in session.ts
 
-  // Prepare input for OpenAI
+  // Prepare input for Claude
   let messagesForAPI: Array<InputMessage | FunctionCallOutputMessage>;
   if (!previousResponseId) {
     // Starting a new chain: send history including the new user message, ensure system prompt
@@ -121,7 +121,6 @@ export async function handleChatMessage(
         );
         // DEBUG log for raw function call data - 简化日志以减少输出
         const simplifiedCall = {
-          type: enhancedCall.type,
           name: enhancedCall.name,
           call_id: enhancedCall.call_id,
           arguments_summary: `${enhancedCall.arguments.substring(0, 50)}${
@@ -155,7 +154,7 @@ export async function handleChatMessage(
       },
       // onComplete: Handle stream completion
       (finalText, responseId) => {
-        // INFO log for completion (OpenAI log has details)
+        // INFO log for completion (Claude log has details)
         logger.info(
           {
             sessionId,
@@ -202,8 +201,8 @@ export async function handleChatMessage(
       },
       // onError: Handle errors during the stream
       (error) => {
-        // ERROR: OpenAI stream error is critical
-        logger.error(error, "[WebSocket] OpenAI stream error during chat", {
+        // ERROR: Claude stream error is critical
+        logger.error(error, "[WebSocket] Claude stream error during chat", {
           sessionId,
         });
         sendMessage(client, {
@@ -216,7 +215,7 @@ export async function handleChatMessage(
   } catch (err) {
     // ERROR: Failure to even start the stream is critical
     const error = err instanceof Error ? err : new Error(String(err));
-    logger.error(error, "[WebSocket] Failed to setup OpenAI stream for chat", {
+    logger.error(error, "[WebSocket] Failed to setup Claude stream for chat", {
       sessionId,
     });
     sendError(client, "Failed to initiate AI stream.", "INTERNAL_ERROR"); // WARN log
@@ -248,7 +247,7 @@ export async function handleFunctionResult(
 
   const { call_id, output } = request.payload.functionCallOutput;
 
-  // Ensure output is a string as required by OpenAI API
+  // Ensure output is a string as required by Claude API
   const stringOutput =
     typeof output === "string" ? output : JSON.stringify(output);
 
@@ -277,7 +276,7 @@ export async function handleFunctionResult(
     return;
   }
 
-  // Prepare input for OpenAI: MUST include the assistant's function_call message
+  // Prepare input for Claude: MUST include the assistant's function_call message
   // Find the assistant message that requested the call and the function result message
   const history = sessionData.chatHistory;
   let assistantMessageForApiInput: BackendChatMessage | undefined = undefined;
@@ -321,8 +320,8 @@ export async function handleFunctionResult(
     assistantMessageForApiInput,
     functionResultForApi,
   ];
-  // Optional DEBUG log for context sent to OpenAI
-  // logger.debug({ messagesSentToOpenAI: messagesForAPI }, "[WebSocket] Sending function result context to OpenAI");
+  // Optional DEBUG log for context sent to Claude
+  // logger.debug({ messagesSentToClaude: messagesForAPI }, "[WebSocket] Sending function result context to Claude");
 
   // Send stream start notification - DEBUG log via sendMessage
   sendMessage(client, { type: "stream_start", payload: { sessionId } });
@@ -334,7 +333,7 @@ export async function handleFunctionResult(
   );
 
   try {
-    // Call OpenAI again with the function result context
+    // Call Claude again with the function result context
     await generateChatResponseStream(
       messagesForAPI,
       previousResponseId,
@@ -359,7 +358,6 @@ export async function handleFunctionResult(
         );
         // DEBUG log for raw subsequent function call data - 简化日志
         const simplifiedSubsequentCall = {
-          type: enhancedCall.type,
           name: enhancedCall.name,
           call_id: enhancedCall.call_id,
           arguments_summary: `${enhancedCall.arguments.substring(0, 50)}${
@@ -445,7 +443,7 @@ export async function handleFunctionResult(
         // ERROR: Critical
         logger.error(
           error,
-          "[WebSocket] OpenAI stream error after function result",
+          "[WebSocket] Claude stream error after function result",
           { sessionId }
         );
         sendMessage(client, {
@@ -464,7 +462,7 @@ export async function handleFunctionResult(
     const error = err instanceof Error ? err : new Error(String(err));
     logger.error(
       error,
-      "[WebSocket] Failed to setup OpenAI stream after function result",
+      "[WebSocket] Failed to setup Claude stream after function result",
       { sessionId }
     );
     sendError(

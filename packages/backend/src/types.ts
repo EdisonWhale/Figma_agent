@@ -31,13 +31,13 @@ export type HistoryMessage = BackendChatMessage | FunctionCallOutputMessage;
 export type InputMessage = CommonChatMessage | FunctionCallOutputMessage;
 
 // Define the structure for Tool definitions sent in the API *request*
-// Matches the structure expected by OpenAI's API `tools` parameter.
+// Compatible with both OpenAI and Claude APIs
 export interface Tool {
-  type: "function";
+  type?: "function"; // Optional for Claude compatibility
   name: string;
   description: string;
-  strict: boolean;
-  parameters: Record<string, unknown>;
+  strict?: boolean; // Optional for Claude compatibility
+  parameters: Record<string, unknown>; // Used as input_schema for Claude
 }
 
 // Type for structured logging entries
