@@ -3,13 +3,13 @@
  * Handles connection and communication with the backend WebSocket server.
  */
 import { config } from "../config";
-import { ConnectionStatus, FunctionCallData } from "../types"; // Use local types
+import { ConnectionStatus } from "../types"; // Use local types
 
 // Define the structure of callbacks the UI hook will provide
 export interface WebSocketCallbacks {
   onMessage: (message: string) => void; // For general messages/errors from this service
   onStatusChange: (status: ConnectionStatus) => void;
-  onFunctionCall: (functionCall: FunctionCallData) => void; // Use FunctionCallData type
+  onFunctionCall: () => void; // Placeholder for disabled function calling
   onChunk: (chunk: string) => void; // For text chunks
   onStreamEnd: (responseId: string) => void; // Stream finished successfully
 }
@@ -106,51 +106,6 @@ export class WebSocketService {
     }
   }
 
-  sendFunctionResult(functionCallOutput: {
-    call_id: string;
-    output: string;
-  }): void {
-    if (!this.ensureConnection()) {
-      console.warn(
-        "[WebSocketService] Cannot send function result: Not connected."
-      );
-      this.callbacks.onMessage(
-        "Error: Not connected. Cannot send function result."
-      );
-      return;
-    }
-    if (!this.sessionId) {
-      console.error(
-        "[WebSocketService] Cannot send function result: Session ID not established."
-      );
-      this.callbacks.onMessage(
-        "Error: Session ID missing. Cannot send function result."
-      );
-      this.callbacks.onStatusChange("error"); // Indicate a problem
-      return;
-    }
-
-    console.log(
-      `[WebSocketService] Sending function result for call ID: ${functionCallOutput.call_id}`
-    );
-    try {
-      this.ws!.send(
-        JSON.stringify({
-          type: "function_result",
-          payload: { functionCallOutput, sessionId: this.sessionId },
-        })
-      );
-    } catch (error) {
-      console.error("[WebSocketService] Send function result error:", error);
-      this.callbacks.onMessage(
-        `Error sending function result: ${
-          error instanceof Error ? error.message : "Unknown"
-        }`
-      );
-      this.callbacks.onStatusChange("error");
-    }
-  }
-
   private ensureConnection(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
@@ -211,10 +166,8 @@ export class WebSocketService {
             this.callbacks.onChunk(payload.text);
           }
           if (payload.functionCall) {
-            console.log(
-              `[WebSocketService] Received function call request: ${payload.functionCall.name}`
-            );
-            this.callbacks.onFunctionCall(payload.functionCall); // Pass FunctionCallData
+            console.log("[WebSocketService] Function calling is disabled");
+            this.callbacks.onFunctionCall(); // Function calling disabled
           }
           break;
         case "stream_end":

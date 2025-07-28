@@ -5,7 +5,6 @@
     "baseUrl": ".",
     "paths": {
       "*": ["*", "node_modules/*"],
-      "@tools/*": ["packages/backend/src/tools/*"],
       "@backend/*": ["packages/backend/src/*"]
     },
     "resolveJsonModule": true,

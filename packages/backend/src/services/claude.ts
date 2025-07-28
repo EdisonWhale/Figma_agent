@@ -2,32 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_API_KEY, ANTHROPIC_MODEL } from "@config/index";
 import {
   InputMessage,
-  FunctionCallOutputMessage,
-  Tool as LocalToolType,
   ChatMessage as CommonChatMessage,
   MessageRole,
 } from "@types";
 import { logger } from "@utils/logger";
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-
-// Type guard to check if a message is a FunctionCallOutput
-function isFunctionCallOutput(
-  message: any
-): message is FunctionCallOutputMessage {
-  return (
-    message?.type === "function_call_output" &&
-    typeof message.call_id === "string" &&
-    message.output !== undefined
-  );
-}
-
-// Interface for detected function calls (keeping same as OpenAI version)
-export interface DetectedFunctionCall {
-  id: string;
-  name: string;
-  arguments: string;
-}
 
 /**
  * Convert internal message format to Claude API format
@@ -89,58 +69,10 @@ function prepareClaudeInput(conversationHistory: Array<InputMessage>): {
         });
       }
 
-      // Handle tool calls from BackendChatMessage format
-      if ((message as any).tool_calls) {
-        for (const toolCall of (message as any).tool_calls) {
-          content.push({
-            type: "tool_use",
-            id: toolCall.id,
-            name: toolCall.function.name,
-            input: JSON.parse(toolCall.function.arguments),
-          });
-        }
-      }
-
       messages.push({
         role: "assistant",
-        content: content.length > 0 ? content : (message as any).content || "",
+        content: (message as any).content || "",
       });
-    }
-    // Handle function call output messages
-    else if (isFunctionCallOutput(message)) {
-      // Convert function call output to tool result
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.role === "user") {
-        // Add to existing user message
-        if (Array.isArray(lastMessage.content)) {
-          lastMessage.content.push({
-            type: "tool_result",
-            tool_use_id: message.call_id,
-            content: message.output,
-          });
-        } else {
-          lastMessage.content = [
-            { type: "text", text: lastMessage.content as string },
-            {
-              type: "tool_result",
-              tool_use_id: message.call_id,
-              content: message.output,
-            },
-          ];
-        }
-      } else {
-        // Create new user message with tool result
-        messages.push({
-          role: "user",
-          content: [
-            {
-              type: "tool_result",
-              tool_use_id: message.call_id,
-              content: message.output,
-            },
-          ],
-        });
-      }
     }
   }
 
@@ -148,27 +80,12 @@ function prepareClaudeInput(conversationHistory: Array<InputMessage>): {
 }
 
 /**
- * Convert internal tool format to Claude API format
- */
-function convertToolsToClaudeFormat(tools: LocalToolType[]): Anthropic.Tool[] {
-  return tools.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    input_schema: tool.parameters as Anthropic.Tool.InputSchema, // Claude uses input_schema instead of parameters
-  }));
-}
-
-/**
  * Generates a chat response using the Claude Messages API (Streaming).
- * Handles text generation and optionally function/tool calls.
- * Maintains the same interface as the OpenAI version.
+ * Simplified version without function calling support.
  */
 export async function generateChatResponseStream(
   conversationHistory: Array<InputMessage>,
-  previousResponseId: string | undefined, // Ignored for Claude, kept for compatibility
-  toolsToUse: LocalToolType[] | undefined,
   onChunk: (chunk: string) => void,
-  onFunctionCall: (functionCall: DetectedFunctionCall) => void,
   onComplete: (finalText: string | null, responseId: string) => void,
   onError: (error: Error) => void
 ): Promise<void> {
@@ -186,15 +103,9 @@ export async function generateChatResponseStream(
       requestPayload.system = system;
     }
 
-    if (toolsToUse && toolsToUse.length > 0) {
-      requestPayload.tools = convertToolsToClaudeFormat(toolsToUse);
-      requestPayload.tool_choice = { type: "auto" };
-    }
-
     logger.info(
       {
         inputMessages: conversationHistory.length,
-        hasTools: !!requestPayload.tools,
         model: ANTHROPIC_MODEL,
       },
       "[Claude] Starting conversation"
@@ -204,8 +115,6 @@ export async function generateChatResponseStream(
 
     let fullTextResponse = "";
     let responseId = "";
-    let currentToolCall: DetectedFunctionCall | null = null;
-    let toolArgumentsBuffer = "";
 
     for await (const event of stream) {
       switch (event.type) {
@@ -217,36 +126,11 @@ export async function generateChatResponseStream(
           );
           break;
 
-        case "content_block_start":
-          if (event.content_block.type === "tool_use") {
-            currentToolCall = {
-              id: event.content_block.id,
-              name: event.content_block.name,
-              arguments: "",
-            };
-            toolArgumentsBuffer = "";
-          }
-          break;
-
         case "content_block_delta":
           if (event.delta.type === "text_delta") {
             const textChunk = event.delta.text;
             fullTextResponse += textChunk;
             onChunk(textChunk);
-          } else if (
-            event.delta.type === "input_json_delta" &&
-            currentToolCall
-          ) {
-            toolArgumentsBuffer += event.delta.partial_json;
-          }
-          break;
-
-        case "content_block_stop":
-          if (currentToolCall && toolArgumentsBuffer) {
-            currentToolCall.arguments = toolArgumentsBuffer;
-            onFunctionCall(currentToolCall);
-            currentToolCall = null;
-            toolArgumentsBuffer = "";
           }
           break;
 

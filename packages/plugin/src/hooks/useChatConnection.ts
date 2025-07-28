@@ -1,12 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { on, emit } from "@create-figma-plugin/utilities";
-import {
-  ConnectionStatus,
-  FunctionCallData,
-  RequestFigmaFunctionHandler,
-  FigmaFunctionResultHandler,
-  SetLoadingHandler,
-} from "../types";
+
+import { ConnectionStatus } from "../types";
 import { WebSocketService } from "../services/websocket";
 
 // Message structure for UI display
@@ -65,27 +59,9 @@ export function useChatConnection() {
           }
         });
       },
-      onFunctionCall: (functionCall: FunctionCallData) => {
-        // Backend requested a Figma function -> Send to Main Thread
-        console.log(
-          `[useChatConnection] Received function call request: ${functionCall.name} (Call ID: ${functionCall.call_id})`
-        );
-        // Stop any active text streaming UI updates
-        if (currentStreamId.current) {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === currentStreamId.current
-                ? { ...msg, isComplete: true }
-                : msg
-            )
-          ); // Mark current stream as 'complete' visually
-          currentStreamId.current = null;
-        }
-        // setIsLoading(true); // Indicate work is happening in Figma
-        emit<RequestFigmaFunctionHandler>(
-          "REQUEST_FIGMA_FUNCTION",
-          functionCall
-        );
+      onFunctionCall: () => {
+        // Function calling is no longer supported
+        console.log("[useChatConnection] Function calling is disabled");
       },
       onStreamEnd: (responseId: string) => {
         // Stream finished -> Mark message as complete
@@ -126,44 +102,7 @@ export function useChatConnection() {
     wsServiceRef.current.connect();
 
     // --- Listeners for events FROM Main Thread ---
-    const unbindLoading = on<SetLoadingHandler>("SET_LOADING", (loading) => {
-      console.log(
-        `[useChatConnection] Received SET_LOADING from main: ${loading}`
-      );
-
-      setIsLoading(loading);
-    });
-
-    const unbindFigmaResult = on<FigmaFunctionResultHandler>(
-      "FIGMA_FUNCTION_RESULT",
-      (result) => {
-        // Received result from Main Thread -> Send back to Backend via WS
-        console.log(
-          `[useChatConnection] Received Figma function result for Call ID: ${result.call_id}`
-        );
-        if (wsServiceRef.current) {
-          wsServiceRef.current.sendFunctionResult({
-            call_id: result.call_id,
-            output: result.output,
-          });
-        } else {
-          console.error(
-            "[useChatConnection] WebSocket service unavailable, cannot send function result."
-          );
-          // Show error to user
-          setMessages((prev) => [
-            ...prev,
-            {
-              text: "Error: Failed to send function result back to server.",
-              isUser: false,
-              id: `error-${Date.now()}`,
-              isComplete: true,
-            },
-          ]);
-          setConnectionStatus("error");
-        }
-      }
-    );
+    // Loading functionality is disabled
 
     // Cleanup on unmount
     return () => {
@@ -171,8 +110,6 @@ export function useChatConnection() {
         "[useChatConnection] Cleaning up WebSocket connection and listeners."
       );
       wsServiceRef.current?.disconnect();
-      unbindLoading();
-      unbindFigmaResult();
     };
   }, []);
 

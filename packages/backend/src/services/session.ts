@@ -1,12 +1,8 @@
 import { randomUUID } from "crypto";
-import {
-  HistoryMessage,
-  BackendChatMessage,
-  FunctionCallOutputMessage,
-} from "../types";
+import { HistoryMessage, BackendChatMessage } from "../types";
 import { logger } from "../utils/logger";
 
-export { HistoryMessage, FunctionCallOutputMessage };
+export { HistoryMessage };
 
 export interface SessionData {
   previousResponseId: string | null;
@@ -142,7 +138,7 @@ export function isValidSession(sessionId: string): boolean {
 export function updateSessionData(
   sessionId: string,
   newPreviousResponseId: string,
-  messageToAdd: BackendChatMessage | FunctionCallOutputMessage
+  messageToAdd: BackendChatMessage
 ): void {
   const sessionData = sessions.get(sessionId);
   if (sessionData) {
@@ -170,7 +166,7 @@ export function updateSessionData(
  */
 export function addMessageToHistory(
   sessionId: string,
-  messageToAdd: BackendChatMessage | FunctionCallOutputMessage
+  messageToAdd: BackendChatMessage
 ): void {
   const sessionData = sessions.get(sessionId);
   if (sessionData) {

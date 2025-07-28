@@ -5,15 +5,14 @@ import {
   WebSocketClient,
   clients,
   isChatMessageRequest,
-  isFunctionResultRequest,
   sendMessage,
   sendError,
   setupHeartbeat,
   validateOrigin,
   ErrorCode,
 } from "./websocketUtils"; // Import from utils
-import { handleChatMessage, handleFunctionResult } from "./websocketHandlers"; // Import handlers
-import { getOrCreateSession, isValidSession } from "./session"; // Import session functions
+import { handleChatMessage } from "./websocketHandlers"; // Import handlers
+import { getOrCreateSession } from "./session"; // Import session functions
 
 /**
  * Initializes and sets up the WebSocket server and its event listeners.
@@ -111,33 +110,6 @@ export function setupWebSocketServer(wss: WebSocketServer) {
           }
           // Delegate to handler (session ID is now guaranteed on client object)
           await handleChatMessage(client, client.sessionId, message); // Handlers log key events at INFO
-        } else if (isFunctionResultRequest(message)) {
-          const requestedSessionId = message.payload.sessionId;
-          // Validate session before processing
-          if (!isValidSession(requestedSessionId)) {
-            // WARN: Invalid session for function result is problematic
-            logger.warn(
-              { clientId: client.clientId, requestedSessionId },
-              "[WebSocket] Invalid session for function result"
-            );
-            sendError(client, "Session not found or expired.", "SESSION_ERROR"); // WARN log
-            return;
-          }
-          // Ensure client's session ID matches the one in the payload (e.g., after reconnect)
-          if (!client.sessionId || client.sessionId !== requestedSessionId) {
-            // WARN: Session mismatch might indicate client state issues
-            logger.warn(
-              {
-                clientId: client.clientId,
-                currentSession: client.sessionId,
-                requestedSession: requestedSessionId,
-              },
-              "[WebSocket] Client session ID mismatch on function result"
-            );
-            client.sessionId = requestedSessionId; // Align client's session ID
-          }
-          // Delegate to handler
-          await handleFunctionResult(client, requestedSessionId, message); // Handlers log key events at INFO
         } else {
           // WARN: Unknown message type might indicate client/server version mismatch or bad client
           logger.warn(

@@ -1,7 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
-import { v4 as uuidv4 } from "uuid";
 import { logger } from "@utils/logger"; // Use path alias
-import { FunctionCallOutputMessage } from "@types"; // Use path alias
 
 // --- Interfaces and Types ---
 
@@ -41,14 +39,6 @@ export interface ChatMessageRequest extends WSMessageBase {
   };
 }
 
-export interface FunctionResultRequest extends WSMessageBase {
-  type: "function_result";
-  payload: {
-    functionCallOutput: Omit<FunctionCallOutputMessage, "type">; // Expecting { call_id, output }
-    sessionId: string;
-  };
-}
-
 // Error codes for structured errors
 export type ErrorCode =
   | "BAD_REQUEST"
@@ -65,17 +55,6 @@ export function isChatMessageRequest(
   return (
     message?.type === "chat_message" &&
     typeof message.payload?.message === "string"
-  );
-}
-
-export function isFunctionResultRequest(
-  message: any
-): message is FunctionResultRequest {
-  return (
-    message?.type === "function_result" &&
-    typeof message.payload?.sessionId === "string" &&
-    typeof message.payload?.functionCallOutput?.call_id === "string" &&
-    message.payload?.functionCallOutput?.output !== undefined
   );
 }
 
