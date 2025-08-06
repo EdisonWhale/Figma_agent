@@ -4,7 +4,7 @@ import {
   InputMessage,
   ChatMessage as CommonChatMessage,
   MessageRole,
-} from "@types";
+} from "../types/chat.types";
 import { logger } from "@utils/logger";
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });

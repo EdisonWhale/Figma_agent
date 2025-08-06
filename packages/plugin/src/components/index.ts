@@ -4,3 +4,4 @@
  */
 export { MessageBubble } from "./MessageBubble";
 export { ConnectionStatusIndicator } from "./ConnectionStatus";
+export { FigmaAPITester } from "./FigmaAPITester";

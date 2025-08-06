@@ -15,7 +15,7 @@
     "baseUrl": ".",
     "paths": {
       // Define paths relative to baseUrl
-      "@common/*": ["../common/src/*"],
+      "@common/*": ["../common/dist/*"],
       "@config/*": ["./src/config/*"],
       "@controllers/*": ["./src/controllers/*"],
       "@services/*": ["./src/services/*"],
@@ -23,15 +23,15 @@
       "@routes/*": ["./src/routes/*"],
       "@middleware/*": ["./src/middleware/*"],
       "@tools/*": ["./src/tools/*"],
-      "@types": ["./src/types"],
+      "@types/*": ["./src/types/*"],
       "@constants/*": ["./src/constants/*"]
     },
     "sourceMap": true,
     "moduleResolution": "node",
-    "composite": true
+    "composite": false
   },
   // Include only source files within this package's src directory
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"],
-  "references": [{ "path": "../common" }]
+
 }

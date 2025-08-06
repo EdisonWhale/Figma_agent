@@ -11,7 +11,7 @@ import {
 } from "./session";
 import { generateChatResponseStream } from "./claude";
 import { ensureSystemInstruction } from "@config/ai";
-import { ChatMessage, InputMessage, BackendChatMessage } from "@types";
+import { ChatMessage, InputMessage, BackendChatMessage } from "../types/chat.types";
 import { logger } from "@utils/logger";
 
 // --- Message Handlers ---

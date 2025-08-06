@@ -89,10 +89,17 @@ export class ClaudeService {
                   toolName: event.content_block.name,
                   toolId: event.content_block.id,
                   input: event.content_block.input,
+                  contentBlockIndex: event.index,
                 },
                 "[Claude] Tool call detected"
               );
-              toolCalls.push(event.content_block);
+              // Store the tool call with its content block index for delta mapping
+              const toolCall = { 
+                ...event.content_block, 
+                contentBlockIndex: event.index,
+                inputJson: '' 
+              };
+              toolCalls.push(toolCall);
             }
             break;
 
@@ -102,6 +109,39 @@ export class ClaudeService {
               fullTextResponse += textChunk;
               tokenCount += textChunk.split(" ").length; // Rough token estimation
               callbacks.onChunk(textChunk);
+            } else if (event.delta.type === "input_json_delta") {
+              // Handle tool call parameter delta updates
+              logger.debug(
+                {
+                  contentBlockIndex: event.index,
+                  delta: event.delta.partial_json,
+                },
+                "[Claude] Tool input delta received"
+              );
+              
+              // Find the tool call by content block index
+              const toolCall = toolCalls.find(tc => tc.contentBlockIndex === event.index);
+              if (toolCall) {
+                // Accumulate the JSON for this tool call
+                toolCall.inputJson += event.delta.partial_json;
+                
+                logger.debug(
+                  {
+                    toolId: toolCall.id,
+                    currentJson: toolCall.inputJson,
+                    deltaAdded: event.delta.partial_json,
+                  },
+                  "[Claude] Tool input JSON accumulated"
+                );
+              } else {
+                logger.warn(
+                  {
+                    contentBlockIndex: event.index,
+                    availableIndexes: toolCalls.map(tc => tc.contentBlockIndex),
+                  },
+                  "[Claude] Could not find tool call for input delta"
+                );
+              }
             }
             break;
 
@@ -193,15 +233,51 @@ export class ClaudeService {
   ): Promise<void> {
     for (const toolCall of toolCalls) {
       try {
+        // Parse accumulated JSON input if available
+        let toolInput = toolCall.input || {};
+        if (toolCall.inputJson && toolCall.inputJson.length > 0) {
+          try {
+            toolInput = JSON.parse(toolCall.inputJson);
+            logger.debug(
+              { 
+                toolName: toolCall.name,
+                rawJson: toolCall.inputJson,
+                parsedInput: toolInput,
+              },
+              "[Claude] Parsed tool input from JSON delta"
+            );
+          } catch (parseError) {
+            logger.error(
+              {
+                toolName: toolCall.name,
+                rawJson: toolCall.inputJson,
+                error: parseError,
+              },
+              "[Claude] Failed to parse tool input JSON"
+            );
+            // Fall back to original input
+            toolInput = toolCall.input || {};
+          }
+        }
+
         logger.info(
-          { toolName: toolCall.name, toolId: toolCall.id },
+          { 
+            toolName: toolCall.name, 
+            toolId: toolCall.id,
+            input: toolInput,
+            hasInput: Object.keys(toolInput || {}).length > 0,
+            inputKeys: Object.keys(toolInput || {}),
+            hasInputJson: !!(toolCall.inputJson && toolCall.inputJson.length > 0),
+            inputJsonLength: toolCall.inputJson?.length || 0,
+            contentBlockIndex: toolCall.contentBlockIndex,
+          },
           "[Claude] Executing tool call"
         );
 
         // Call MCP tool
         const result = await this.mcpService.callTool({
           name: toolCall.name,
-          arguments: toolCall.input,
+          arguments: toolInput,
         });
 
         // Send tool result back to callbacks
@@ -209,7 +285,7 @@ export class ClaudeService {
           callbacks.onToolCall({
             toolName: toolCall.name,
             toolId: toolCall.id,
-            arguments: toolCall.input,
+            arguments: toolInput,
             result: result.content[0]?.text || "Tool executed successfully",
             isError: result.isError || false,
           });
@@ -255,11 +331,22 @@ export class ClaudeService {
     }
 
     const mcpTools = this.mcpService.getTools();
-    return mcpTools.map((tool) => ({
+    const claudeTools = mcpTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
       input_schema: tool.inputSchema,
     }));
+
+    // DEBUG: Log the actual tool definitions sent to Claude
+    logger.info(
+      {
+        toolCount: claudeTools.length,
+        sampleTool: claudeTools.find(t => t.name === 'create_sticky_note'),
+      },
+      "[Claude] Tools formatted for Claude API"
+    );
+
+    return claudeTools;
   }
 
   /**

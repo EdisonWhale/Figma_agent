@@ -7,15 +7,18 @@ import {
   Text,
 } from "@create-figma-plugin/ui";
 import { h } from "preact";
-import { useCallback, useRef, useEffect } from "preact/hooks";
+import { useCallback, useRef, useEffect, useState } from "preact/hooks";
 
 import styles from "./ChatStyles.module.css";
 import { MessageBubble } from "./components/MessageBubble";
 import { ConnectionStatusIndicator } from "./components/ConnectionStatus";
+import { FigmaAPITester } from "./components/FigmaAPITester";
 import { useChatConnection } from "./hooks";
 import { CONNECTION_STATUS, DEFAULT_MESSAGES, KEYS } from "./constants";
 
 function Plugin() {
+  const [showAPITester, setShowAPITester] = useState(false);
+  
   const {
     messages,
     isLoading,
@@ -65,9 +68,25 @@ function Plugin() {
     isLoading ||
     connectionStatus !== CONNECTION_STATUS.CONNECTED;
 
+  // 如果显示 API 测试器，则直接返回测试界面
+  if (showAPITester) {
+    return (
+      <div className={styles.pluginWrapper}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", borderBottom: "1px solid #eee" }}>
+          <Text style={{ fontWeight: "bold" }}>🧪 Figma API 测试模式</Text>
+          <Button onClick={() => setShowAPITester(false)} secondary>返回聊天</Button>
+        </div>
+        <FigmaAPITester />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.pluginWrapper}>
-      <ConnectionStatusIndicator status={connectionStatus} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", borderBottom: "1px solid #eee" }}>
+        <ConnectionStatusIndicator status={connectionStatus} />
+        <Button onClick={() => setShowAPITester(true)} secondary>API 测试</Button>
+      </div>
 
       <div className={styles.chatHistory}>
         {/* Initial Prompt */}

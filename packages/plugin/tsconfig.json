@@ -6,7 +6,8 @@
     "jsxFactory": "h",
     "baseUrl": "../../",
     "paths": {
-      "common/*": ["packages/common/src/*"]
+      "common/*": ["packages/common/src/*"],
+      "@common/*": ["packages/common/src/*"]
     }
   },
   "include": ["src/**/*", "../common/**/*"],

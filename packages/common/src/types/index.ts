@@ -8,3 +8,6 @@ export * from './chat.types';
 
 // Connection Types
 export * from './connection.types';
+
+// Figma API Types
+export * from './figma.types';
