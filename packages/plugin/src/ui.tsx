@@ -21,9 +21,12 @@ function Plugin() {
     isLoading,
     connectionStatus,
     inputValue,
+    currentError,
     sendMessage,
     handleInputChange,
     retryConnection,
+    clearError,
+    retryErrorRecovery,
   } = useChatConnection();
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);

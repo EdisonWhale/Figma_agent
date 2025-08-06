@@ -1,5 +1,5 @@
 import { on, showUI, emit } from "@create-figma-plugin/utilities";
-import { CloseHandler } from "./types";
+import { CloseHandler } from "./types/index";
 import { UI_CONFIG } from "./constants";
 
 export default function () {

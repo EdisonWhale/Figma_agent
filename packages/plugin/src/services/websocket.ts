@@ -1,9 +1,11 @@
 /**
  * WebSocket Service
  * Handles connection and communication with the backend WebSocket server.
+ * Integrated with FigmaAPIService and enhanced error handling.
  */
 import { config } from "../config";
-import { ConnectionStatus } from "../types"; // Use local types
+import { ConnectionStatus, PluginErrorFactory, PluginErrorManager, PluginError, type ErrorRecoveryStrategy } from "../types/index";
+import { FigmaAPIService, type ToolCallInfo } from "./figmaAPI";
 
 // Define the structure of callbacks the UI hook will provide
 export interface WebSocketCallbacks {
@@ -13,15 +15,7 @@ export interface WebSocketCallbacks {
   onChunk: (chunk: string) => void; // For text chunks
   onStreamEnd: (responseId: string) => void; // Stream finished successfully
   onToolCall?: (toolCall: ToolCallInfo) => void; // For MCP tool calls
-}
-
-// Tool call information
-export interface ToolCallInfo {
-  toolName: string;
-  toolId: string;
-  arguments: Record<string, any>;
-  result: string;
-  isError: boolean;
+  onError?: (error: PluginError) => void; // Enhanced error handling
 }
 
 export class WebSocketService {
@@ -31,10 +25,33 @@ export class WebSocketService {
   private reconnectAttempts = 0;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private isManualClose = false; // Flag to prevent reconnect on manual close
+  
+  // Enhanced services integration
+  private figmaAPIService: FigmaAPIService;
+  private errorManager: PluginErrorManager;
 
   constructor(callbacks: WebSocketCallbacks) {
     this.callbacks = callbacks;
-    console.log("[WebSocketService] Initialized");
+    
+    // Initialize services
+    this.figmaAPIService = new FigmaAPIService();
+    this.errorManager = new PluginErrorManager({
+      onError: (error: PluginError) => {
+        this.callbacks.onError?.(error);
+        console.error("[WebSocketService] Error handled:", error);
+      },
+      onRecovery: (error: PluginError, strategy: ErrorRecoveryStrategy) => {
+        console.log(`[WebSocketService] Attempting recovery for ${error.type} error:`, strategy.label);
+      },
+      onRecoverySuccess: (error: PluginError) => {
+        console.log(`[WebSocketService] Recovery successful for ${error.type} error`);
+      },
+      onRecoveryFailure: (error: PluginError, reason: string) => {
+        console.error(`[WebSocketService] Recovery failed for ${error.type} error:`, reason);
+      }
+    });
+    
+    console.log("[WebSocketService] Initialized with enhanced services");
   }
 
   connect(): void {
@@ -63,7 +80,12 @@ export class WebSocketService {
       // Note: Browser WebSocket API doesn't expose ping/pong events
       // The browser automatically handles pong responses to server pings
     } catch (error) {
-      console.error("[WebSocketService] Connection failed:", error);
+      const pluginError = PluginErrorFactory.websocket(
+        'connection_failed',
+        error instanceof Error ? error.message : 'Unknown connection error',
+        () => this.connect()
+      );
+      this.errorManager.handleError(pluginError);
       this.callbacks.onStatusChange("error");
       this.attemptReconnect(); // Attempt reconnect on initial connection error
     }
@@ -72,6 +94,11 @@ export class WebSocketService {
   disconnect(): void {
     console.log("[WebSocketService] Manual disconnect requested.");
     this.isManualClose = true; // Set flag *before* closing
+    
+    // Clean up services
+    this.figmaAPIService.cleanup();
+    this.errorManager.clearAllErrors();
+    
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
@@ -86,10 +113,13 @@ export class WebSocketService {
 
   sendMessage(message: string): void {
     if (!this.ensureConnection()) {
-      console.warn("[WebSocketService] Cannot send message: Not connected.");
-      this.callbacks.onMessage(
-        "Error: Not connected. Please wait or retry connection."
+      const connectionError = PluginErrorFactory.connection(
+        "Cannot send message: Not connected",
+        { operation: 'sendMessage' },
+        () => this.connect()
       );
+      this.errorManager.handleError(connectionError);
+      
       // Optionally trigger connect attempt if disconnected
       if (
         this.ws?.readyState === WebSocket.CLOSED ||
@@ -109,12 +139,12 @@ export class WebSocketService {
         })
       );
     } catch (error) {
-      console.error("[WebSocketService] Send message error:", error);
-      this.callbacks.onMessage(
-        `Error sending message: ${
-          error instanceof Error ? error.message : "Unknown"
-        }`
+      const sendError = PluginErrorFactory.websocket(
+        'send_message',
+        error instanceof Error ? error.message : 'Unknown send error',
+        () => this.sendMessage(message)
       );
+      this.errorManager.handleError(sendError);
       this.callbacks.onStatusChange("error");
     }
   }
@@ -185,26 +215,35 @@ export class WebSocketService {
           break;
         case "tool_call":
           console.log("[WebSocketService] Tool call received:", payload);
+          const toolCall: ToolCallInfo = {
+            toolName: payload.toolName,
+            toolId: payload.toolId,
+            arguments: payload.arguments,
+            result: payload.result,
+            isError: payload.isError || false,
+          };
+          
           if (this.callbacks.onToolCall) {
-            this.callbacks.onToolCall({
-              toolName: payload.toolName,
-              toolId: payload.toolId,
-              arguments: payload.arguments,
-              result: payload.result,
-              isError: payload.isError || false,
-            });
+            this.callbacks.onToolCall(toolCall);
           }
-          // Also handle Figma API calls
+          
+          // Handle Figma API calls through FigmaAPIService
           if (payload.toolName === "create_sticky_note") {
             console.log(
-              "[WebSocketService] create_sticky_note arguments:",
+              "[WebSocketService] Delegating create_sticky_note to FigmaAPIService:",
               payload.arguments
             );
-            this.handleFigmaAPICall(
-              "create_sticky_note",
-              payload.toolId,
-              payload.arguments
-            );
+            try {
+              // Use FigmaAPIService instead of direct handling
+              this.figmaAPIService.sendToolCall(toolCall);
+            } catch (error) {
+              const figmaError = PluginErrorFactory.figmaAPI(
+                payload.toolName,
+                error instanceof Error ? error.message : 'Unknown Figma API error',
+                { toolCall }
+              );
+              this.errorManager.handleError(figmaError);
+            }
           }
           break;
         case "stream_end":
@@ -221,21 +260,20 @@ export class WebSocketService {
           this.callbacks.onStreamEnd(payload.responseId || ""); // Pass responseId
           break;
         case "stream_error":
-          console.error(
-            "[WebSocketService] Stream error from server:",
-            payload.message
+          const streamError = PluginErrorFactory.websocket(
+            'stream_error',
+            payload.message || 'Unknown stream error'
           );
-          this.callbacks.onMessage(`Stream Error: ${payload.message}`);
+          this.errorManager.handleError(streamError);
           this.callbacks.onStatusChange("error");
           break;
         case "error": // General error from backend
-          console.error(
-            `[WebSocketService] Error from server (Code: ${payload.code}):`,
-            payload.message
+          const backendError = PluginErrorFactory.api(
+            payload.message || 'Unknown backend error',
+            payload.code ? parseInt(payload.code) : undefined,
+            { code: payload.code }
           );
-          this.callbacks.onMessage(
-            `Error (${payload.code}): ${payload.message}`
-          );
+          this.errorManager.handleError(backendError);
           this.callbacks.onStatusChange("error");
           break;
         default:
@@ -245,15 +283,13 @@ export class WebSocketService {
           );
       }
     } catch (error) {
-      console.error(
-        "[WebSocketService] Error parsing message:",
-        error,
-        "Data:",
-        event.data
+      const parseError = PluginErrorFactory.websocket(
+        'message_parse',
+        error instanceof Error ? error.message : 'Failed to parse message',
+        () => this.connect()
       );
-      this.callbacks.onMessage(
-        "Error: Received unparsable message from server."
-      );
+      parseError.details = { rawData: event.data };
+      this.errorManager.handleError(parseError);
       this.callbacks.onStatusChange("error");
     }
   }
@@ -325,23 +361,4 @@ export class WebSocketService {
     }, delay);
   }
 
-  /**
-   * Handle Figma API calls by sending messages to the main thread
-   */
-  private handleFigmaAPICall(action: string, toolId: string, data: any): void {
-    console.log(`[WebSocketService] Handling Figma API call: ${action}`, data);
-
-    // Send message to main thread via postMessage
-    parent.postMessage(
-      {
-        pluginMessage: {
-          type: "FIGMA_API_CALL",
-          id: toolId,
-          action: action,
-          data: data,
-        },
-      },
-      "*"
-    );
-  }
 }

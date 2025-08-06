@@ -1,6 +1,6 @@
 /** @jsx h */
 import { h } from "preact";
-import { ConnectionStatus } from "../types";
+import { ConnectionStatus } from "../types/index";
 import styles from "../ChatStyles.module.css";
 
 interface ConnectionStatusProps {

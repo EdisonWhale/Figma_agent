@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 
-import { ConnectionStatus } from "../types";
+import { ConnectionStatus, PluginError, PluginErrorFactory } from "../types/index";
 import { WebSocketService } from "../services/websocket";
 
-// Message structure for UI display
+// Enhanced message structure for UI display
 export interface Message {
   text: string;
   isUser: boolean;
   id?: string;
   isComplete?: boolean;
+  isError?: boolean; // Enhanced for error display
+  errorType?: string; // Error classification for styling
 }
 
 export function useChatConnection() {
@@ -17,6 +19,7 @@ export function useChatConnection() {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
   const [inputValue, setInputValue] = useState("");
+  const [currentError, setCurrentError] = useState<PluginError | null>(null);
 
   const currentStreamId = useRef<string | null>(null);
   const wsServiceRef = useRef<WebSocketService | null>(null);
@@ -33,6 +36,29 @@ export function useChatConnection() {
           setIsLoading(false); // Stop loading indicator
           currentStreamId.current = null; // Reset stream tracking
         }
+        if (status === "connected") {
+          setCurrentError(null); // Clear errors on successful connection
+        }
+      },
+      onError: (error: PluginError) => {
+        console.error(`[useChatConnection] Enhanced error received:`, error);
+        setCurrentError(error);
+        
+        // Add error message to chat
+        setMessages((prev) => [
+          ...prev,
+          {
+            text: error.userMessage,
+            isUser: false,
+            id: `error-${error.id}`,
+            isComplete: true,
+            isError: true,
+            errorType: error.type
+          }
+        ]);
+        
+        setIsLoading(false);
+        currentStreamId.current = null;
       },
       onChunk: (chunk: string) => {
         // Append chunk to the current streaming message or start a new one
@@ -152,13 +178,29 @@ export function useChatConnection() {
       console.error(
         "[useChatConnection] WebSocket service unavailable, cannot send message."
       );
+      
+      // Create and handle error using new system
+      const serviceError = PluginErrorFactory.connection(
+        "WebSocket service unavailable",
+        { operation: 'sendMessage', userMessage: userMessageText },
+        () => {
+          // Recovery handler: try to reconnect
+          if (wsServiceRef.current) {
+            wsServiceRef.current.connect();
+          }
+        }
+      );
+      
+      setCurrentError(serviceError);
       setMessages((prev) => [
         ...prev,
         {
-          text: "Error: Cannot send message, connection lost.",
+          text: serviceError.userMessage,
           isUser: false,
-          id: `error-${Date.now()}`,
+          id: `error-${serviceError.id}`,
           isComplete: true,
+          isError: true,
+          errorType: serviceError.type
         },
       ]);
       setConnectionStatus("error");
@@ -172,6 +214,7 @@ export function useChatConnection() {
 
   const retryConnectionCallback = useCallback(() => {
     console.log("[useChatConnection] Retry connection requested.");
+    setCurrentError(null); // Clear current error
     if (
       wsServiceRef.current &&
       connectionStatus !== "connected" &&
@@ -181,14 +224,35 @@ export function useChatConnection() {
     }
   }, [connectionStatus]);
 
+  // Enhanced error recovery callback
+  const clearErrorCallback = useCallback(() => {
+    setCurrentError(null);
+  }, []);
+
+  // Retry current error's recovery action if available
+  const retryErrorRecovery = useCallback(async () => {
+    if (currentError?.recoveryHandler) {
+      try {
+        console.log(`[useChatConnection] Attempting error recovery for: ${currentError.type}`);
+        await currentError.recoveryHandler();
+        setCurrentError(null);
+      } catch (error) {
+        console.error(`[useChatConnection] Error recovery failed:`, error);
+      }
+    }
+  }, [currentError]);
+
   return {
     messages,
     isLoading,
     connectionStatus,
     inputValue,
+    currentError, // Enhanced: expose current error
     sendMessage: sendMessageCallback,
     handleInputChange: handleInputChangeCallback,
     retryConnection: retryConnectionCallback,
+    clearError: clearErrorCallback, // Enhanced: clear error function
+    retryErrorRecovery, // Enhanced: retry error recovery
     currentStreamId: currentStreamId.current,
   };
 }

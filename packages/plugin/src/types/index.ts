@@ -3,9 +3,13 @@
  * Centralized type definitions for the plugin
  */
 import { EventHandler } from "@create-figma-plugin/utilities";
+import type { PluginError } from './errors';
 
 // Re-export shared types from common package
 export * from "common/index";
+
+// Error Handling Types and Classes
+export * from './errors';
 
 // Import shared types for extension
 import {
@@ -27,6 +31,12 @@ export type ConnectionStatus =
   | "connected"
   | "error"
   | "disconnected";
+
+// UI -> Main: Request plugin close (from old types.ts)
+export interface CloseHandler extends EventHandler {
+  name: "CLOSE";
+  handler: () => void;
+}
 
 // UI Message Structure
 export interface UIMessage {
@@ -63,15 +73,19 @@ export interface ConnectionStatusProps {
   status: ConnectionStatus;
 }
 
-// Hook Return Types
+// Enhanced Hook Return Types
 export interface ChatConnectionHook {
   messages: UIMessage[];
   isLoading: boolean;
   connectionStatus: ConnectionStatus;
   inputValue: string;
+  currentError: PluginError | null; // Enhanced: current error state
   sendMessage: () => void;
   handleInputChange: (value: string) => void;
   retryConnection: () => void;
+  clearError: () => void; // Enhanced: clear error function
+  retryErrorRecovery: () => Promise<void>; // Enhanced: retry error recovery
+  currentStreamId: string | null;
 }
 
 // Configuration Types
