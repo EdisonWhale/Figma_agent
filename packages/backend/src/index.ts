@@ -5,6 +5,7 @@ import { PORT, NODE_ENV } from "./config";
 import { corsMiddleware } from "./middleware/cors";
 import routes from "./routes";
 import { WebSocketController } from "./controllers/websocket.controller";
+import { MCPService } from "./services/mcp.service";
 import { logger } from "./utils/logger";
 import { validateEnvironmentConfig } from "./utils/validation.utils";
 import { HTTP_STATUS } from "./constants";
@@ -24,8 +25,11 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Initialize WebSocket controller
-const wsController = new WebSocketController();
+// Initialize MCP service
+const mcpService = new MCPService();
+
+// Initialize WebSocket controller with MCP service
+const wsController = new WebSocketController(mcpService);
 wsController.setupWebSocketServer(wss);
 
 // Middleware
@@ -71,17 +75,33 @@ process.on("SIGINT", () => {
   });
 });
 
-server.listen(PORT, () => {
-  logger.info(
-    { environment: NODE_ENV, port: PORT },
-    "Server started successfully"
-  );
-  logger.info({}, `HTTP server listening on http://localhost:${PORT}`);
-  logger.info({}, `WebSocket server ready on ws://localhost:${PORT}`);
-
-  // Start memory monitoring in production
-  if (NODE_ENV === "production") {
-    MemoryMonitor.getInstance().startMonitoring(60000); // Every minute
-    logger.info({}, "Memory monitoring started");
+// Initialize MCP service and start server
+async function startServer() {
+  try {
+    // Initialize MCP service
+    logger.info({}, "[MCP] Initializing MCP service...");
+    await mcpService.initialize();
+    logger.info({}, "[MCP] MCP service initialized successfully");
+  } catch (error) {
+    logger.error({ error }, "[MCP] Failed to initialize MCP service");
+    logger.warn({}, "[MCP] Server will start without MCP functionality");
   }
-});
+
+  // Start server
+  server.listen(PORT, () => {
+    logger.info(
+      { environment: NODE_ENV, port: PORT },
+      "Server started successfully"
+    );
+    logger.info({}, `HTTP server listening on http://localhost:${PORT}`);
+    logger.info({}, `WebSocket server ready on ws://localhost:${PORT}`);
+
+    // Start memory monitoring in production
+    if (NODE_ENV === "production") {
+      MemoryMonitor.getInstance().startMonitoring(60000); // Every minute
+      logger.info({}, "Memory monitoring started");
+    }
+  });
+}
+
+startServer();

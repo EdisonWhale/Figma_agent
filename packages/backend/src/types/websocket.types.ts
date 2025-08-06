@@ -21,6 +21,7 @@ export type ServerToClientMessageType =
   | "stream_end"
   | "stream_error"
   | "session_update"
+  | "tool_call"
   | "error";
 
 // Base WebSocket Message Interface
@@ -75,6 +76,17 @@ export interface StreamErrorMessage extends WSMessageBase {
   };
 }
 
+export interface ToolCallMessage extends WSMessageBase {
+  type: "tool_call";
+  payload: {
+    toolName: string;
+    toolId: string;
+    arguments: Record<string, any>;
+    result: string;
+    isError: boolean;
+  };
+}
+
 export interface ErrorMessage extends WSMessageBase {
   type: "error";
   payload: {
@@ -99,17 +111,24 @@ export type WSMessage =
   | StreamChunkMessage
   | StreamEndMessage
   | StreamErrorMessage
+  | ToolCallMessage
   | ErrorMessage
   | ChatMessageRequest;
 
 // Type guards
-export function isChatMessageRequest(message: any): message is ChatMessageRequest {
-  return message?.type === "chat_message" && 
-         typeof message?.payload?.message === "string";
+export function isChatMessageRequest(
+  message: any
+): message is ChatMessageRequest {
+  return (
+    message?.type === "chat_message" &&
+    typeof message?.payload?.message === "string"
+  );
 }
 
 export function isWSMessage(message: any): message is WSMessage {
-  return message && 
-         typeof message.type === "string" && 
-         (message.payload === undefined || typeof message.payload === "object");
+  return (
+    message &&
+    typeof message.type === "string" &&
+    (message.payload === undefined || typeof message.payload === "object")
+  );
 }

@@ -7,16 +7,19 @@ import { v4 as uuidv4 } from "uuid";
 import { logger } from "@utils/logger";
 import { WebSocketService } from "@services/websocket.service";
 import { SessionService } from "@services/session.service";
+import { MCPService } from "@services/mcp.service";
 import { validateOrigin } from "@utils/websocket.utils";
 import { WEBSOCKET_CONFIG } from "@constants/index";
 
 export class WebSocketController {
   private wsService: WebSocketService;
   private sessionService: SessionService;
+  private mcpService: MCPService;
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
-    this.wsService = new WebSocketService();
+  constructor(mcpService: MCPService) {
+    this.mcpService = mcpService;
+    this.wsService = new WebSocketService(mcpService);
     this.sessionService = new SessionService();
   }
 
@@ -66,6 +69,15 @@ export class WebSocketController {
     // Setup message handler
     ws.on("message", (data) => {
       this.handleMessage(clientId, data);
+    });
+
+    // Setup pong handler for heartbeat
+    ws.on("pong", () => {
+      const client = this.wsService.getClient(clientId);
+      if (client) {
+        client.isAlive = true;
+        logger.trace({ clientId }, "[WebSocket] Pong received");
+      }
     });
 
     // Setup close handler

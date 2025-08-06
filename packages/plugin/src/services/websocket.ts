@@ -12,6 +12,16 @@ export interface WebSocketCallbacks {
   onFunctionCall: () => void; // Placeholder for disabled function calling
   onChunk: (chunk: string) => void; // For text chunks
   onStreamEnd: (responseId: string) => void; // Stream finished successfully
+  onToolCall?: (toolCall: ToolCallInfo) => void; // For MCP tool calls
+}
+
+// Tool call information
+export interface ToolCallInfo {
+  toolName: string;
+  toolId: string;
+  arguments: Record<string, any>;
+  result: string;
+  isError: boolean;
 }
 
 export class WebSocketService {
@@ -49,6 +59,9 @@ export class WebSocketService {
       this.ws.onmessage = this.handleMessage.bind(this);
       this.ws.onclose = this.handleClose.bind(this);
       this.ws.onerror = this.handleError.bind(this);
+
+      // Note: Browser WebSocket API doesn't expose ping/pong events
+      // The browser automatically handles pong responses to server pings
     } catch (error) {
       console.error("[WebSocketService] Connection failed:", error);
       this.callbacks.onStatusChange("error");
@@ -170,6 +183,30 @@ export class WebSocketService {
             this.callbacks.onFunctionCall(); // Function calling disabled
           }
           break;
+        case "tool_call":
+          console.log("[WebSocketService] Tool call received:", payload);
+          if (this.callbacks.onToolCall) {
+            this.callbacks.onToolCall({
+              toolName: payload.toolName,
+              toolId: payload.toolId,
+              arguments: payload.arguments,
+              result: payload.result,
+              isError: payload.isError || false,
+            });
+          }
+          // Also handle Figma API calls
+          if (payload.toolName === "create_sticky_note") {
+            console.log(
+              "[WebSocketService] create_sticky_note arguments:",
+              payload.arguments
+            );
+            this.handleFigmaAPICall(
+              "create_sticky_note",
+              payload.toolId,
+              payload.arguments
+            );
+          }
+          break;
         case "stream_end":
           console.log(
             `[WebSocketService] Stream ended. Response ID: ${payload.responseId}`
@@ -286,5 +323,25 @@ export class WebSocketService {
       this.reconnectTimeout = null; // Clear timeout ID before connecting
       this.connect(); // Attempt connection again
     }, delay);
+  }
+
+  /**
+   * Handle Figma API calls by sending messages to the main thread
+   */
+  private handleFigmaAPICall(action: string, toolId: string, data: any): void {
+    console.log(`[WebSocketService] Handling Figma API call: ${action}`, data);
+
+    // Send message to main thread via postMessage
+    parent.postMessage(
+      {
+        pluginMessage: {
+          type: "FIGMA_API_CALL",
+          id: toolId,
+          action: action,
+          data: data,
+        },
+      },
+      "*"
+    );
   }
 }

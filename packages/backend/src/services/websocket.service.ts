@@ -6,6 +6,7 @@ import { WebSocket } from "ws";
 import { logger } from "@utils/logger";
 import { ChatService } from "./chat.service";
 import { SessionService } from "./session.service";
+import { MCPService } from "./mcp.service";
 import { WebSocketClient, WSMessage } from "../types/websocket.types";
 import { ERROR_CODES, WS_MESSAGE_TYPES } from "@constants/index";
 import {
@@ -25,9 +26,11 @@ export class WebSocketService {
   private clients = new Map<string, WebSocketClient>();
   private chatService: ChatService;
   private sessionService: SessionService;
+  private mcpService: MCPService;
 
-  constructor() {
-    this.chatService = new ChatService();
+  constructor(mcpService: MCPService) {
+    this.mcpService = mcpService;
+    this.chatService = new ChatService(mcpService);
     this.sessionService = new SessionService();
   }
 
@@ -52,6 +55,13 @@ export class WebSocketService {
   public unregisterClient(clientId: string): void {
     this.clients.delete(clientId);
     logger.info({ clientId }, "[WebSocket] Client unregistered");
+  }
+
+  /**
+   * Get a WebSocket client by ID
+   */
+  public getClient(clientId: string): WebSocketClient | undefined {
+    return this.clients.get(clientId);
   }
 
   /**
@@ -185,6 +195,22 @@ export class WebSocketService {
             this.sendMessage(clientId, {
               type: WS_MESSAGE_TYPES.STREAM_ERROR,
               payload: { message: error.message },
+            });
+          },
+          onToolCall: (toolCall) => {
+            logger.info(
+              { clientId, toolName: toolCall.toolName },
+              "[WebSocket] Tool call executed"
+            );
+            this.sendMessage(clientId, {
+              type: WS_MESSAGE_TYPES.TOOL_CALL,
+              payload: {
+                toolName: toolCall.toolName,
+                toolId: toolCall.toolId,
+                arguments: toolCall.arguments,
+                result: toolCall.result,
+                isError: toolCall.isError,
+              },
             });
           },
         }

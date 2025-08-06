@@ -1,0 +1,36 @@
+{
+  "name": "figma-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Figma FigJam sticky note creation",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "figma-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:unix": "tsc && chmod +x dist/index.js",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "figma",
+    "figjam",
+    "sticky-notes",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT"
+}

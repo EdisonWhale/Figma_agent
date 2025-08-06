@@ -24,7 +24,7 @@ export const WS_MESSAGE_TYPES = {
   // Client to Server
   CHAT_MESSAGE: "chat_message",
   FUNCTION_RESULT: "function_result",
-  
+
   // Server to Client
   CONNECTION_ESTABLISHED: "connection_established",
   STREAM_START: "stream_start",
@@ -32,6 +32,7 @@ export const WS_MESSAGE_TYPES = {
   STREAM_END: "stream_end",
   STREAM_ERROR: "stream_error",
   SESSION_UPDATE: "session_update",
+  TOOL_CALL: "tool_call",
   ERROR: "error",
 } as const;
 

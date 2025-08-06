@@ -7,9 +7,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=packages/plugin && npm run build --workspace=packages/backend",
+    "build": "npm run build --workspace=packages/plugin && npm run build --workspace=packages/backend && npm run build --workspace=packages/mcp-server",
     "dev:backend": "npm run dev --workspace=packages/backend",
-    "dev:plugin": "npm run watch --workspace=packages/plugin"
+    "dev:plugin": "npm run watch --workspace=packages/plugin",
+    "dev:mcp": "npm run dev --workspace=packages/mcp-server",
+    "start:mcp-socket": "npm run socket --workspace=packages/mcp-server"
   },
   "author": "",
   "license": "MIT"

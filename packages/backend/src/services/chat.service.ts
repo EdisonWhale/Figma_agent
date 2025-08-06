@@ -3,21 +3,33 @@
  * Handles AI chat processing and response generation
  */
 import { ClaudeService } from "./claude.service";
+import { MCPService } from "./mcp.service";
 import { InputMessage } from "../types/chat.types";
 import { logger } from "@utils/logger";
 import { ensureSystemInstruction } from "@config/ai";
+
+export interface ToolCallResult {
+  toolName: string;
+  toolId: string;
+  arguments: Record<string, any>;
+  result: string;
+  isError: boolean;
+}
 
 export interface ChatCallbacks {
   onChunk: (chunk: string) => void;
   onComplete: (finalText: string, responseId: string) => void;
   onError: (error: Error) => void;
+  onToolCall?: (toolCall: ToolCallResult) => void;
 }
 
 export class ChatService {
   private claudeService: ClaudeService;
+  private mcpService: MCPService;
 
-  constructor() {
-    this.claudeService = new ClaudeService();
+  constructor(mcpService: MCPService) {
+    this.mcpService = mcpService;
+    this.claudeService = new ClaudeService(mcpService);
   }
 
   /**

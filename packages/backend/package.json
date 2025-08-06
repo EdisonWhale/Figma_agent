@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.57.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
@@ -17,7 +18,8 @@
     "express": "^4.18.2",
     "openai": "^4.96.0",
     "uuid": "^11.1.0",
-    "ws": "^8.18.1"
+    "ws": "^8.18.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

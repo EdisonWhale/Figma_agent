@@ -10,12 +10,15 @@ import { AI_CONFIG } from "@constants/index";
 import { ChatCallbacks } from "./chat.service";
 import { AIServiceError, logError, retryOperation } from "@utils/error.utils";
 import { MetricsCollector, PerformanceTimer } from "@utils/performance.utils";
+import { MCPService, MCPTool } from "./mcp.service";
 
 export class ClaudeService {
   private anthropic: Anthropic;
+  private mcpService: MCPService;
 
-  constructor() {
+  constructor(mcpService: MCPService) {
     this.anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+    this.mcpService = mcpService;
   }
 
   /**
@@ -39,6 +42,7 @@ export class ClaudeService {
         max_tokens: AI_CONFIG.MAX_TOKENS,
         stream: true,
         temperature: AI_CONFIG.TEMPERATURE,
+        tools: this.getMCPTools(),
       };
 
       if (system) {
@@ -66,6 +70,7 @@ export class ClaudeService {
       let fullTextResponse = "";
       let responseId = "";
       let tokenCount = 0;
+      let toolCalls: any[] = [];
 
       for await (const event of stream) {
         switch (event.type) {
@@ -75,6 +80,20 @@ export class ClaudeService {
               { responseId, model: event.message.model },
               "[Claude] Response stream created"
             );
+            break;
+
+          case "content_block_start":
+            if (event.content_block.type === "tool_use") {
+              logger.debug(
+                {
+                  toolName: event.content_block.name,
+                  toolId: event.content_block.id,
+                  input: event.content_block.input,
+                },
+                "[Claude] Tool call detected"
+              );
+              toolCalls.push(event.content_block);
+            }
             break;
 
           case "content_block_delta":
@@ -87,6 +106,11 @@ export class ClaudeService {
             break;
 
           case "message_stop":
+            // Handle tool calls if any
+            if (toolCalls.length > 0) {
+              await this.handleToolCalls(toolCalls, callbacks);
+            }
+
             const duration = timer.end();
 
             logger.info(
@@ -94,6 +118,7 @@ export class ClaudeService {
                 responseId,
                 textLength: fullTextResponse.length,
                 estimatedTokens: tokenCount,
+                toolCallsCount: toolCalls.length,
                 duration: `${duration.toFixed(2)}ms`,
               },
               "[Claude] Response stream completed"
@@ -157,6 +182,84 @@ export class ClaudeService {
     }
 
     return { messages, system: systemMessage };
+  }
+
+  /**
+   * Handle tool calls from Claude
+   */
+  private async handleToolCalls(
+    toolCalls: any[],
+    callbacks: ChatCallbacks
+  ): Promise<void> {
+    for (const toolCall of toolCalls) {
+      try {
+        logger.info(
+          { toolName: toolCall.name, toolId: toolCall.id },
+          "[Claude] Executing tool call"
+        );
+
+        // Call MCP tool
+        const result = await this.mcpService.callTool({
+          name: toolCall.name,
+          arguments: toolCall.input,
+        });
+
+        // Send tool result back to callbacks
+        if (callbacks.onToolCall) {
+          callbacks.onToolCall({
+            toolName: toolCall.name,
+            toolId: toolCall.id,
+            arguments: toolCall.input,
+            result: result.content[0]?.text || "Tool executed successfully",
+            isError: result.isError || false,
+          });
+        }
+
+        // Also send as a chunk for immediate feedback
+        const resultText =
+          result.content[0]?.text || "Tool executed successfully";
+        callbacks.onChunk(`\n\n🔧 **${toolCall.name}**: ${resultText}\n\n`);
+      } catch (error) {
+        logger.error(
+          { toolName: toolCall.name, error },
+          "[Claude] Tool call failed"
+        );
+
+        if (callbacks.onToolCall) {
+          callbacks.onToolCall({
+            toolName: toolCall.name,
+            toolId: toolCall.id,
+            arguments: toolCall.input,
+            result: `Tool call failed: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+            isError: true,
+          });
+        }
+
+        callbacks.onChunk(
+          `\n\n❌ **${toolCall.name}** failed: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }\n\n`
+        );
+      }
+    }
+  }
+
+  /**
+   * Get MCP tools formatted for Claude API
+   */
+  private getMCPTools(): Anthropic.Tool[] {
+    if (!this.mcpService.isConnectedToMCP()) {
+      return [];
+    }
+
+    const mcpTools = this.mcpService.getTools();
+    return mcpTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.inputSchema,
+    }));
   }
 
   /**
