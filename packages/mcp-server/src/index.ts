@@ -14,9 +14,21 @@ const CreateStickyNoteSchema = z.object({
   x: z.number().optional().describe("X position (default: 100)"),
   y: z.number().optional().describe("Y position (default: 100)"),
   color: z
-    .string()
+    .enum(['yellow', 'blue', 'green', 'pink', 'purple', 'red', 'orange', 'dark_blue', 'dark_green', 'lightRed', 'lightBlue', 'lightGreen', 'gray', 'lightGray'])
     .optional()
-    .describe("Sticky note color (yellow, blue, green, pink, purple)"),
+    .describe("Sticky note color from FigJam color palette"),
+  fills: z
+    .array(z.object({
+      type: z.string(),
+      color: z.object({
+        r: z.number(),
+        g: z.number(),
+        b: z.number(),
+      }).optional(),
+      opacity: z.number().optional(),
+    }))
+    .optional()
+    .describe("Custom fill paint objects (overrides color)"),
   width: z
     .number()
     .optional()
@@ -29,6 +41,10 @@ const CreateStickyNoteSchema = z.object({
     .boolean()
     .optional()
     .describe("Whether to show author name (default: true)"),
+  isWideWidth: z
+    .boolean()
+    .optional()
+    .describe("Whether to use wide rectangular shape (default: false)"),
 });
 
 // Schema for rectangle creation
@@ -513,9 +529,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             x: args.x || 100,
             y: args.y || 100,
             color: args.color || "yellow",
+            fills: args.fills,
             width: args.width || 240,
             height: args.height || 240,
             authorVisible: args.authorVisible !== false,
+            isWideWidth: args.isWideWidth || false,
           }
         };
         break;
@@ -643,11 +661,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${toolName}`);
     }
 
+    // Log tool execution for debugging (appears in terminal)
+    console.error(`[MCP] ${toolName} executed successfully with parameters:`, JSON.stringify(result.data));
+    
+    // For query tools, provide more informative response to guide AI behavior
+    if (toolName === "get_current_page_info" || toolName.includes("query") || toolName === "get_element_details") {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Tool ${toolName} executed successfully. The page elements data has been retrieved and is being processed by the Figma plugin. This query provides information about all elements currently on the canvas, including their IDs, types, positions, and content. You can now use this information to identify existing elements for modification or analysis.`,
+          },
+        ],
+      };
+    }
+    
+    // For modification tools, provide specific guidance
+    if (toolName === "update_element" || toolName === "delete_element") {
+      return {
+        content: [
+          {
+            type: "text", 
+            text: `Tool ${toolName} executed successfully. The element has been modified on the Figma canvas. The changes should be visible to the user immediately.`,
+          },
+        ],
+      };
+    }
+    
     return {
       content: [
         {
           type: "text",
-          text: `Tool call: ${toolName} with parameters: ${JSON.stringify(result.data)}`,
+          text: `Successfully executed ${toolName}`,
         },
       ],
     };

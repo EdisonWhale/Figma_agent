@@ -38,11 +38,12 @@ export class ChatService {
   public async processMessage(
     message: string,
     chatHistory: InputMessage[],
-    callbacks: ChatCallbacks
+    callbacks: ChatCallbacks,
+    sessionId?: string
   ): Promise<void> {
     try {
       logger.info(
-        { messageLength: message.length, historyLength: chatHistory.length },
+        { messageLength: message.length, historyLength: chatHistory.length, sessionId },
         "[Chat] Processing message"
       );
 
@@ -53,7 +54,7 @@ export class ChatService {
       ]);
 
       // Generate response using Claude service
-      await this.claudeService.generateResponse(conversationHistory, callbacks);
+      await this.claudeService.generateResponse(conversationHistory, callbacks, sessionId);
     } catch (error) {
       logger.error({ error }, "[Chat] Message processing failed");
       callbacks.onError(error as Error);

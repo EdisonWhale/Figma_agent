@@ -14,7 +14,7 @@ import { MessageBubble } from "./components/MessageBubble";
 import { ConnectionStatusIndicator } from "./components/ConnectionStatus";
 import { FigmaAPITester } from "./components/FigmaAPITester";
 import { useChatConnection } from "./hooks";
-import { CONNECTION_STATUS, DEFAULT_MESSAGES, KEYS } from "./constants";
+import { CONNECTION_STATUS, DEFAULT_MESSAGES, KEYS, isSendKeyPressed } from "./constants";
 
 function Plugin() {
   const [showAPITester, setShowAPITester] = useState(false);
@@ -48,7 +48,8 @@ function Plugin() {
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === KEYS.ENTER && !event.shiftKey) {
+      // Check for send key combination (Ctrl+Enter or Cmd+Return)
+      if (isSendKeyPressed(event)) {
         event.preventDefault();
         if (
           inputValue.trim() !== "" &&
@@ -58,6 +59,8 @@ function Plugin() {
           sendMessage();
         }
       }
+      // Allow Shift+Enter for newline (default behavior)
+      // Other Enter combinations are now allowed for newline
     },
     [sendMessage, inputValue, isLoading, connectionStatus]
   );

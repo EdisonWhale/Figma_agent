@@ -227,23 +227,101 @@ export class WebSocketService {
             this.callbacks.onToolCall(toolCall);
           }
           
-          // Handle Figma API calls through FigmaAPIService
-          if (payload.toolName === "create_sticky_note") {
-            console.log(
-              "[WebSocketService] Delegating create_sticky_note to FigmaAPIService:",
-              payload.arguments
+          // Handle ALL Figma API calls through FigmaAPIService
+          // All MCP tools are supported by the main thread
+          
+          // List of supported MCP tools for validation
+          const SUPPORTED_TOOLS = [
+            // Page information tools
+            'get_current_page_info', 'query_elements', 'get_element_details', 'get_page_statistics',
+            // Element creation tools
+            'create_sticky_note', 'create_rectangle', 'create_ellipse', 'create_text', 'create_connector',
+            // Element management tools
+            'update_element', 'delete_element', 'delete_elements', 'select_elements', 'duplicate_element', 'arrange_elements'
+          ];
+          
+          if (!SUPPORTED_TOOLS.includes(payload.toolName)) {
+            console.warn(`[WebSocketService] Unsupported tool call: ${payload.toolName}`);
+            const unsupportedError = PluginErrorFactory.figmaAPI(
+              payload.toolName,
+              `Tool '${payload.toolName}' is not supported by the Figma plugin`,
+              { toolCall, supportedTools: SUPPORTED_TOOLS }
             );
-            try {
-              // Use FigmaAPIService instead of direct handling
-              this.figmaAPIService.sendToolCall(toolCall);
-            } catch (error) {
-              const figmaError = PluginErrorFactory.figmaAPI(
-                payload.toolName,
-                error instanceof Error ? error.message : 'Unknown Figma API error',
-                { toolCall }
-              );
-              this.errorManager.handleError(figmaError);
+            this.errorManager.handleError(unsupportedError);
+            break;
+          }
+          
+          console.log(
+            `[WebSocketService] Processing supported tool call: ${payload.toolName}`,
+            {
+              toolId: payload.toolId,
+              hasArguments: !!payload.arguments,
+              argumentKeys: payload.arguments ? Object.keys(payload.arguments) : [],
+              isQuery: payload.toolName.startsWith('get_') || payload.toolName.includes('query'),
+              isModification: ['update_element', 'delete_element', 'delete_elements'].includes(payload.toolName),
+              isCreation: payload.toolName.startsWith('create_')
             }
+          );
+          
+          try {
+            // Send all tool calls to FigmaAPIService (main thread handles all tools)
+            this.figmaAPIService.sendToolCall(toolCall)
+              .then((figmaResponse) => {
+                console.log(`[WebSocketService] Successfully processed ${payload.toolName}`, figmaResponse);
+                
+                // Send the actual Figma response data back to backend via WebSocket
+                // This ensures AI gets the real data instead of just "success" message
+                if (figmaResponse.success && figmaResponse.result) {
+                  console.log(`[WebSocketService] Sending tool result to backend:`, {
+                    toolName: payload.toolName,
+                    toolId: payload.toolId,
+                    hasResult: true,
+                    resultKeys: Object.keys(figmaResponse.result || {})
+                  });
+                  
+                  // Send the actual tool result data to backend
+                  this.sendMessage(JSON.stringify({
+                    type: "tool_result",
+                    payload: {
+                      toolName: payload.toolName,
+                      toolId: payload.toolId,
+                      result: figmaResponse.result,
+                      success: true
+                    }
+                  }));
+                } else {
+                  console.warn(`[WebSocketService] Tool ${payload.toolName} completed but without result data`);
+                }
+              })
+              .catch((error) => {
+                console.error(`[WebSocketService] Failed to process ${payload.toolName}:`, error);
+                const figmaError = PluginErrorFactory.figmaAPI(
+                  payload.toolName,
+                  error instanceof Error ? error.message : 'Unknown Figma API error',
+                  { toolCall }
+                );
+                this.errorManager.handleError(figmaError);
+                
+                // Send error result to backend
+                this.sendMessage(JSON.stringify({
+                  type: "tool_result",
+                  payload: {
+                    toolName: payload.toolName,
+                    toolId: payload.toolId,
+                    result: null,
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                  }
+                }));
+              });
+          } catch (error) {
+            console.error(`[WebSocketService] Failed to process ${payload.toolName}:`, error);
+            const figmaError = PluginErrorFactory.figmaAPI(
+              payload.toolName,
+              error instanceof Error ? error.message : 'Unknown Figma API error',
+              { toolCall }
+            );
+            this.errorManager.handleError(figmaError);
           }
           break;
         case "stream_end":

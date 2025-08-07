@@ -47,6 +47,44 @@ export const CSS_CLASSES = {
   STATUS_DISCONNECTED: "statusDisconnected",
 } as const;
 
+// Keyboard Keys
+export const KEYS = {
+  ENTER: "Enter",
+  SHIFT: "Shift",
+  CONTROL: "Control",
+  META: "Meta", // Command key on Mac
+} as const;
+
+// Helper function to detect platform
+export const getPlatform = (): "mac" | "windows" | "other" => {
+  if (typeof navigator !== "undefined") {
+    const platform = navigator.platform.toLowerCase();
+    if (platform.includes("mac")) return "mac";
+    if (platform.includes("win")) return "windows";
+  }
+  return "other";
+};
+
+// Helper function to check if send key combination is pressed
+export const isSendKeyPressed = (event: KeyboardEvent): boolean => {
+  const platform = getPlatform();
+  const isEnter = event.key === KEYS.ENTER;
+  
+  if (platform === "mac") {
+    // On Mac: Command + Return
+    return isEnter && event.metaKey && !event.shiftKey && !event.ctrlKey;
+  } else {
+    // On Windows/Linux: Ctrl + Enter
+    return isEnter && event.ctrlKey && !event.shiftKey && !event.metaKey;
+  }
+};
+
+// Helper function to get the send shortcut text
+export const getSendShortcutText = (): string => {
+  const platform = getPlatform();
+  return platform === "mac" ? "Cmd+Return" : "Ctrl+Enter";
+};
+
 // Default Messages
 export const DEFAULT_MESSAGES = {
   INITIAL_PROMPT: "Send a message to start chatting.",
@@ -54,12 +92,6 @@ export const DEFAULT_MESSAGES = {
   CONNECTION_LOST: "Error: Cannot send message, connection lost.",
   CONNECTION_FAILED:
     "Connection failed. Please try refreshing the plugin later.",
-  PLACEHOLDER_CONNECTED: "Send a message (Shift+Enter for newline)",
+  PLACEHOLDER_CONNECTED: `Send a message (${getSendShortcutText()} to send, Shift+Enter for newline)`,
   PLACEHOLDER_CONNECTING: "Connecting...",
-} as const;
-
-// Keyboard Keys
-export const KEYS = {
-  ENTER: "Enter",
-  SHIFT: "Shift",
 } as const;

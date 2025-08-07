@@ -7,18 +7,55 @@ import { BackendChatMessage } from "../types/chat.types";
 import { logger } from "@utils/logger";
 import { SESSION_CONFIG } from "@constants/index";
 
+export interface CreatedElement {
+  id: string;
+  type: string;
+  text?: string;
+  color?: string;
+  x?: number;
+  y?: number;
+  createdAt: number;
+  toolCall: string; // The tool call that created this element
+}
+
 export interface SessionData {
   previousResponseId: string | null;
   chatHistory: BackendChatMessage[];
   lastAccessed: number;
+  recentElements: CreatedElement[]; // Track recently created elements
 }
 
 export class SessionService {
   private sessions = new Map<string, SessionData>();
   private cleanupInterval: NodeJS.Timeout | null = null;
+  private sessionLocks = new Map<string, Promise<void>>(); // Session-level locks
 
   constructor() {
     this.setupSessionCleanup();
+  }
+
+  /**
+   * Execute operation with session lock to prevent race conditions
+   */
+  private async withSessionLock<T>(sessionId: string, operation: () => Promise<T> | T): Promise<T> {
+    // Wait for any existing lock on this session
+    const existingLock = this.sessionLocks.get(sessionId);
+    if (existingLock) {
+      await existingLock;
+    }
+
+    // Create new lock for this operation
+    const lockPromise = (async () => {
+      try {
+        return await operation();
+      } finally {
+        // Remove lock when operation completes
+        this.sessionLocks.delete(sessionId);
+      }
+    })();
+
+    this.sessionLocks.set(sessionId, lockPromise.then(() => {})); // Store as Promise<void>
+    return await lockPromise;
   }
 
   /**
@@ -54,6 +91,7 @@ export class SessionService {
       previousResponseId: null,
       chatHistory: [],
       lastAccessed: Date.now(),
+      recentElements: [], // Initialize empty array for tracking created elements
     };
 
     this.sessions.set(sessionId, sessionData);
@@ -166,6 +204,85 @@ export class SessionService {
       },
       "[Session] Cleanup task started"
     );
+  }
+
+  /**
+   * Add a recently created element to session (thread-safe)
+   */
+  public async addCreatedElement(sessionId: string, element: Omit<CreatedElement, 'createdAt'>): Promise<void> {
+    await this.withSessionLock(sessionId, () => {
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        const createdElement: CreatedElement = {
+          ...element,
+          createdAt: Date.now(),
+        };
+        
+        // Add to recent elements (keep only last 10 elements)
+        session.recentElements.push(createdElement);
+        if (session.recentElements.length > 10) {
+          session.recentElements = session.recentElements.slice(-10);
+        }
+        
+        session.lastAccessed = Date.now();
+        
+        logger.info(
+          { sessionId, elementId: element.id, type: element.type },
+          "[Session] Element added to session with lock"
+        );
+      } else {
+        logger.warn(
+          { sessionId, elementId: element.id },
+          "[Session] Attempted to add element to non-existent session"
+        );
+      }
+    });
+  }
+
+  /**
+   * Get recent elements from session, optionally filtered by type or text
+   */
+  public getRecentElements(
+    sessionId: string, 
+    filter?: { type?: string; text?: string; limit?: number }
+  ): CreatedElement[] {
+    const session = this.sessions.get(sessionId);
+    if (!session) return [];
+
+    let elements = [...session.recentElements];
+    
+    // Filter by type
+    if (filter?.type) {
+      elements = elements.filter(el => el.type.toLowerCase() === filter.type?.toLowerCase());
+    }
+    
+    // Filter by text (partial match)
+    if (filter?.text) {
+      elements = elements.filter(el => 
+        el.text?.toLowerCase().includes(filter.text?.toLowerCase() || '')
+      );
+    }
+    
+    // Sort by creation time (newest first)
+    elements.sort((a, b) => b.createdAt - a.createdAt);
+    
+    // Limit results
+    if (filter?.limit) {
+      elements = elements.slice(0, filter.limit);
+    }
+    
+    return elements;
+  }
+
+  /**
+   * Get the most recently created element, optionally filtered
+   */
+  public getMostRecentElement(
+    sessionId: string,
+    filter?: { type?: string; text?: string }
+  ): CreatedElement | null {
+    const elements = this.getRecentElements(sessionId, { ...filter, limit: 1 });
+    return elements.length > 0 ? elements[0] : null;
   }
 
   /**

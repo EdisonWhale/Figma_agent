@@ -6,6 +6,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { logger } from "@utils/logger";
 import path from "path";
+import { SessionService } from "./session.service";
 
 export interface MCPTool {
   name: string;
@@ -16,6 +17,7 @@ export interface MCPTool {
 export interface MCPToolCall {
   name: string;
   arguments: Record<string, any>;
+  sessionId?: string; // Optional session ID for special ID resolution
 }
 
 export interface MCPToolResult {
@@ -33,9 +35,38 @@ export class MCPService {
   private isConnected = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 3;
+  private sessionService: SessionService | null = null;
 
   constructor() {
     logger.info({}, "[MCP] Service initialized");
+  }
+
+  /**
+   * Set session service for special ID resolution
+   */
+  public setSessionService(sessionService: SessionService): void {
+    this.sessionService = sessionService;
+    logger.info({}, "[MCP] Session service registered for special ID resolution");
+  }
+
+  /**
+   * Check if session service is available
+   */
+  public hasSessionService(): boolean {
+    return this.sessionService !== null;
+  }
+
+  /**
+   * Save created element to session immediately
+   */
+  public async saveCreatedElement(sessionId: string, element: any): Promise<void> {
+    if (this.sessionService) {
+      await this.sessionService.addCreatedElement(sessionId, element);
+      logger.debug(
+        { sessionId, elementId: element.id },
+        "[MCP] Element saved to session via direct call"
+      );
+    }
   }
 
   /**
@@ -172,7 +203,7 @@ export class MCPService {
   }
 
   /**
-   * Call a tool
+   * Call a tool with special ID resolution
    */
   public async callTool(toolCall: MCPToolCall): Promise<MCPToolResult> {
     if (!this.client || !this.isConnected) {
@@ -180,14 +211,22 @@ export class MCPService {
     }
 
     try {
+      // Resolve special IDs if sessionId is provided
+      const resolvedArguments = await this.resolveSpecialIds(toolCall.arguments, toolCall.sessionId);
+
       logger.info(
-        { toolName: toolCall.name, args: toolCall.arguments },
+        { 
+          toolName: toolCall.name, 
+          originalArgs: toolCall.arguments,
+          resolvedArgs: resolvedArguments,
+          hasSessionId: !!toolCall.sessionId 
+        },
         "[MCP] Calling tool"
       );
 
       const response = await this.client.callTool({
         name: toolCall.name,
-        arguments: toolCall.arguments,
+        arguments: resolvedArguments,
       });
 
       logger.info(
@@ -195,10 +234,11 @@ export class MCPService {
         "[MCP] Tool call completed"
       );
 
+      // Enhance response based on tool type
+      const enhancedContent = this.enhanceToolResponse(toolCall.name, response);
+
       return {
-        content: (response as any).content || [
-          { type: "text", text: "Tool executed successfully" },
-        ],
+        content: enhancedContent,
         isError: false,
       };
     } catch (error) {
@@ -246,5 +286,122 @@ export class MCPService {
       logger.error({ error }, "[MCP] Service initialization failed");
       throw error;
     }
+  }
+
+  /**
+   * Resolve special IDs to actual element IDs using session data
+   */
+  private async resolveSpecialIds(
+    args: Record<string, any>, 
+    sessionId?: string
+  ): Promise<Record<string, any>> {
+    if (!sessionId || !this.sessionService) {
+      return args;
+    }
+
+    const resolvedArgs = { ...args };
+
+    // Check for special IDs in elementId parameter
+    if (resolvedArgs.elementId && typeof resolvedArgs.elementId === 'string') {
+      const specialId = resolvedArgs.elementId;
+      let actualId = null;
+
+      switch (specialId) {
+        case "LAST_CREATED":
+          const lastElement = this.sessionService.getMostRecentElement(sessionId);
+          if (lastElement) {
+            actualId = lastElement.id;
+            logger.info(
+              { sessionId, specialId, resolvedId: actualId, elementType: lastElement.type },
+              "[MCP] Resolved special ID"
+            );
+          }
+          break;
+
+        case "LAST_STICKY":
+          const lastSticky = this.sessionService.getMostRecentElement(sessionId, { type: "sticky" });
+          if (lastSticky) {
+            actualId = lastSticky.id;
+            logger.info(
+              { sessionId, specialId, resolvedId: actualId },
+              "[MCP] Resolved special ID for sticky note"
+            );
+          }
+          break;
+
+        case "LAST_TEXT":
+          const lastText = this.sessionService.getMostRecentElement(sessionId, { type: "text" });
+          if (lastText) {
+            actualId = lastText.id;
+            logger.info(
+              { sessionId, specialId, resolvedId: actualId },
+              "[MCP] Resolved special ID for text element"
+            );
+          }
+          break;
+
+        default:
+          // Not a special ID, keep as is
+          break;
+      }
+
+      if (actualId) {
+        resolvedArgs.elementId = actualId;
+      } else if (specialId.startsWith("LAST_")) {
+        logger.warn(
+          { sessionId, specialId },
+          "[MCP] Could not resolve special ID - no matching element found"
+        );
+        // Keep the special ID to allow graceful error handling by Figma plugin
+      }
+    }
+
+    return resolvedArgs;
+  }
+
+  /**
+   * Enhance tool response with better context for AI
+   */
+  private enhanceToolResponse(toolName: string, response: any): Array<{ type: string; text: string }> {
+    const baseContent = (response as any).content || [
+      { type: "text", text: "Tool executed successfully" },
+    ];
+
+    // For query tools, provide better context
+    if (toolName === "get_current_page_info" || toolName === "query_elements") {
+      const responseText = baseContent[0]?.text || "";
+      
+      // Try to parse and enhance page info response
+      try {
+        const pageData = JSON.parse(responseText);
+        if (pageData.elements && Array.isArray(pageData.elements)) {
+          const elementCount = pageData.elements.length;
+          const elementTypes = pageData.elements.reduce((acc: Record<string, number>, el: any) => {
+            acc[el.type] = (acc[el.type] || 0) + 1;
+            return acc;
+          }, {});
+          
+          let enhancedText = `Found ${elementCount} elements on the page:\n`;
+          Object.entries(elementTypes).forEach(([type, count]) => {
+            enhancedText += `- ${count} ${type.toLowerCase()} element${count !== 1 ? 's' : ''}\n`;
+          });
+          
+          // Add element details for the first few elements
+          if (pageData.elements.length > 0) {
+            enhancedText += "\nRecent elements:\n";
+            pageData.elements.slice(0, 5).forEach((el: any) => {
+              const text = el.text ? ` ("${el.text}")` : '';
+              enhancedText += `- ${el.type} (ID: ${el.id})${text}\n`;
+            });
+          }
+          
+          return [{ type: "text", text: enhancedText }];
+        }
+      } catch (error) {
+        // If parsing fails, return original content
+      }
+    }
+
+    return baseContent;
   }
 }

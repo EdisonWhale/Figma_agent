@@ -16,7 +16,7 @@ export type MessageRole = CommonMessageRole;
 
 export interface InputMessage {
   role: MessageRole;
-  content: string | null;
+  content: string | null | any[]; // Support structured content for tool_use and tool_result
 }
 
 export interface BackendChatMessage extends CommonChatMessage {

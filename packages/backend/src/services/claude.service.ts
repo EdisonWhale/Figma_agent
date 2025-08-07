@@ -10,7 +10,7 @@ import { AI_CONFIG } from "@constants/index";
 import { ChatCallbacks } from "./chat.service";
 import { AIServiceError, logError, retryOperation } from "@utils/error.utils";
 import { MetricsCollector, PerformanceTimer } from "@utils/performance.utils";
-import { MCPService, MCPTool } from "./mcp.service";
+import { MCPService } from "./mcp.service";
 
 export class ClaudeService {
   private anthropic: Anthropic;
@@ -26,7 +26,8 @@ export class ClaudeService {
    */
   public async generateResponse(
     conversationHistory: InputMessage[],
-    callbacks: ChatCallbacks
+    callbacks: ChatCallbacks,
+    sessionId?: string
   ): Promise<void> {
     const timer = new PerformanceTimer("Claude.generateResponse", {
       messageCount: conversationHistory.length,
@@ -148,7 +149,9 @@ export class ClaudeService {
           case "message_stop":
             // Handle tool calls if any
             if (toolCalls.length > 0) {
-              await this.handleToolCalls(toolCalls, callbacks);
+              // Execute tools and continue conversation with tool results
+              await this.handleToolCallsAndContinue(toolCalls, conversationHistory, callbacks, timer, sessionId);
+              return; // Don't call onComplete here, will be called after tool result processing
             }
 
             const duration = timer.end();
@@ -209,14 +212,34 @@ export class ClaudeService {
 
     for (const msg of conversationHistory) {
       if (msg.role === "system") {
-        systemMessage = msg.content || "";
+        // Handle different content types for system messages
+        if (typeof msg.content === "string") {
+          systemMessage = msg.content || "";
+        } else if (msg.content) {
+          // Convert array or other types to string for system messages
+          systemMessage = Array.isArray(msg.content) 
+            ? JSON.stringify(msg.content) 
+            : String(msg.content);
+        } else {
+          systemMessage = "";
+        }
         continue;
       }
 
       if (msg.role === "user" || msg.role === "assistant") {
+        // Handle both string content and structured content (for tool_use/tool_result)
+        let content: string | any[];
+        if (typeof msg.content === "string") {
+          content = msg.content || "";
+        } else if (Array.isArray(msg.content)) {
+          content = msg.content;
+        } else {
+          content = msg.content || "";
+        }
+
         messages.push({
           role: msg.role,
-          content: msg.content || "",
+          content: content as any, // Allow structured content for Claude API
         });
       }
     }
@@ -225,7 +248,189 @@ export class ClaudeService {
   }
 
   /**
-   * Handle tool calls from Claude
+   * Handle tool calls and continue conversation with results
+   */
+  private async handleToolCallsAndContinue(
+    toolCalls: any[],
+    conversationHistory: InputMessage[],
+    callbacks: ChatCallbacks,
+    timer: any,
+    sessionId?: string
+  ): Promise<void> {
+    try {
+      // Execute all tool calls and collect results
+      const toolResults: any[] = [];
+      
+      for (const toolCall of toolCalls) {
+        try {
+          // Parse accumulated JSON input if available
+          let toolInput = toolCall.input || {};
+          if (toolCall.inputJson && toolCall.inputJson.length > 0) {
+            try {
+              toolInput = JSON.parse(toolCall.inputJson);
+            } catch (parseError) {
+              logger.error(
+                {
+                  toolName: toolCall.name,
+                  rawJson: toolCall.inputJson,
+                  error: parseError,
+                },
+                "[Claude] Failed to parse tool input JSON"
+              );
+              toolInput = toolCall.input || {};
+            }
+          }
+
+          logger.info(
+            { 
+              toolName: toolCall.name, 
+              toolId: toolCall.id,
+              input: toolInput,
+            },
+            "[Claude] Executing tool call"
+          );
+
+          // Call MCP tool with session ID for special ID resolution
+          const result = await this.mcpService.callTool({
+            name: toolCall.name,
+            arguments: toolInput,
+            sessionId,
+          });
+
+          // Immediately extract and save created element ID for session context
+          if (!result.isError && toolCall.name.startsWith('create_') && sessionId) {
+            try {
+              const resultText = result.content[0]?.text || "";
+              const elementId = this.extractElementIdFromResult(resultText);
+              
+              if (elementId) {
+                const elementType = toolCall.name.replace('create_', '');
+                const createdElement = {
+                  id: elementId,
+                  type: elementType,
+                  text: toolInput.text || undefined,
+                  color: toolInput.color || undefined,
+                  x: toolInput.x || undefined,
+                  y: toolInput.y || undefined,
+                  toolCall: toolCall.name,
+                };
+                
+                // Store element info directly with mcpService session reference
+                if (this.mcpService.hasSessionService()) {
+                  await this.mcpService.saveCreatedElement(sessionId, createdElement);
+                }
+                
+                logger.info(
+                  { sessionId, elementId, toolName: toolCall.name },
+                  "[Claude] Created element saved to session synchronously"
+                );
+              }
+            } catch (error) {
+              logger.warn(
+                { error, toolCall: toolCall.name },
+                "[Claude] Failed to extract element ID from tool result"
+              );
+            }
+          }
+
+          // Notify callbacks for internal processing
+          if (callbacks.onToolCall) {
+            callbacks.onToolCall({
+              toolName: toolCall.name,
+              toolId: toolCall.id,
+              arguments: toolInput,
+              result: result.content[0]?.text || "Tool executed successfully",
+              isError: result.isError || false,
+            });
+          }
+
+          // Prepare tool result for Claude API
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolCall.id,
+            content: result.content[0]?.text || "Tool executed successfully",
+            is_error: result.isError || false,
+          });
+
+        } catch (error) {
+          logger.error(
+            { toolName: toolCall.name, error },
+            "[Claude] Tool call failed"
+          );
+
+          // Add error result
+          toolResults.push({
+            type: "tool_result", 
+            tool_use_id: toolCall.id,
+            content: `Tool call failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            is_error: true,
+          });
+        }
+      }
+
+      // Create assistant message with tool use blocks
+      const assistantContent = [
+        ...toolCalls.map(tc => {
+          let input = tc.input || {};
+          if (tc.inputJson && tc.inputJson.length > 0) {
+            try {
+              input = JSON.parse(tc.inputJson);
+            } catch (parseError) {
+              input = tc.input || {};
+            }
+          }
+          return {
+            type: "tool_use",
+            id: tc.id,
+            name: tc.name,
+            input,
+          };
+        }),
+      ];
+
+      const assistantMessage: InputMessage = {
+        role: "assistant",
+        content: assistantContent,
+      };
+
+      // Create user message with tool results
+      const toolResultMessage: InputMessage = {
+        role: "user", 
+        content: toolResults,
+      };
+
+      // Continue conversation with tool results
+      const newConversationHistory = [
+        ...conversationHistory,
+        assistantMessage,
+        toolResultMessage,
+      ];
+
+      logger.info(
+        { toolResultsCount: toolResults.length },
+        "[Claude] Continuing conversation with tool results"
+      );
+
+      // Recursively generate response with tool results
+      await this.generateResponse(newConversationHistory, callbacks, sessionId);
+      
+    } catch (error) {
+      const duration = timer.getDuration();
+      
+      logError(error as Error, "Claude.handleToolCallsAndContinue", {
+        toolCallsCount: toolCalls.length,
+        duration: duration ? `${duration.toFixed(2)}ms` : "unknown",
+      });
+
+      callbacks.onError(new AIServiceError(
+        `Tool processing error: ${(error as Error).message}`,
+        error as Error
+      ));
+    }
+  }
+
+  /**
+   * Handle tool calls from Claude (removed - no longer used)
    */
   private async handleToolCalls(
     toolCalls: any[],
@@ -291,10 +496,8 @@ export class ClaudeService {
           });
         }
 
-        // Also send as a chunk for immediate feedback
-        const resultText =
-          result.content[0]?.text || "Tool executed successfully";
-        callbacks.onChunk(`\n\n🔧 **${toolCall.name}**: ${resultText}\n\n`);
+        // Note: Tool result is handled via onToolCall callback for internal processing
+        // User interface should not show technical tool call details
       } catch (error) {
         logger.error(
           { toolName: toolCall.name, error },
@@ -347,6 +550,34 @@ export class ClaudeService {
     );
 
     return claudeTools;
+  }
+
+  /**
+   * Extract element ID from tool result text
+   */
+  private extractElementIdFromResult(resultText: string): string | null {
+    try {
+      // Try to parse as JSON first (structured response)
+      const parsed = JSON.parse(resultText);
+      if (parsed.elementId) return parsed.elementId;
+      if (parsed.stickyId) return parsed.stickyId;
+    } catch {
+      // Fall back to regex pattern matching for text responses
+      const patterns = [
+        /(?:elementId|stickyId)[:\s]+"?([A-Za-z0-9_:-]+)"?/i,
+        /ID[:\s]+"?([A-Za-z0-9_:-]+)"?/i,
+        /\(ID[:\s]+([A-Za-z0-9_:-]+)\)/i,
+      ];
+      
+      for (const pattern of patterns) {
+        const match = resultText.match(pattern);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+    }
+    
+    return null;
   }
 
   /**

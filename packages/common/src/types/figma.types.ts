@@ -112,6 +112,7 @@ export interface FigmaElement {
   // Sticky note specific
   color?: string;
   authorVisible?: boolean;
+  isWideWidth?: boolean;
   
   // Connector specific
   connectorStart?: ConnectorEndpoint;
@@ -169,10 +170,12 @@ export interface StickyNoteCreateOptions {
   text: string;
   x?: number;
   y?: number;
-  color?: 'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'red' | 'orange' | 'dark_blue' | 'dark_green';
+  color?: 'yellow' | 'blue' | 'green' | 'pink' | 'purple' | 'red' | 'orange' | 'dark_blue' | 'dark_green' | 'lightRed' | 'lightBlue' | 'lightGreen' | 'gray' | 'lightGray';
+  fills?: Paint[];
   width?: number;
   height?: number;
   authorVisible?: boolean;
+  isWideWidth?: boolean;
 }
 
 export interface ConnectorCreateOptions {

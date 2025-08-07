@@ -23,6 +23,7 @@ export function useChatConnection() {
 
   const currentStreamId = useRef<string | null>(null);
   const wsServiceRef = useRef<WebSocketService | null>(null);
+  const lastMessageRef = useRef<{ text: string; timestamp: number } | null>(null);
 
   // --- WebSocket Connection and Callbacks ---
   useEffect(() => {
@@ -154,6 +155,26 @@ export function useChatConnection() {
       });
       return;
     }
+
+    // Prevent duplicate messages within short time window (race condition protection)
+    const now = Date.now();
+    const trimmedMessage = inputValue.trim();
+    const lastMessage = lastMessageRef.current;
+    
+    if (
+      lastMessage && 
+      lastMessage.text === trimmedMessage && 
+      (now - lastMessage.timestamp) < 2000 // 2 second window
+    ) {
+      console.warn("[useChatConnection] Duplicate message detected, ignoring:", {
+        message: trimmedMessage,
+        timeDiff: now - lastMessage.timestamp
+      });
+      return;
+    }
+
+    // Store this message for duplicate detection
+    lastMessageRef.current = { text: trimmedMessage, timestamp: now };
 
     const userMessageText = inputValue;
     setMessages((prev) => [

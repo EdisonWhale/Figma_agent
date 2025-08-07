@@ -24,6 +24,7 @@ export const WS_MESSAGE_TYPES = {
   // Client to Server
   CHAT_MESSAGE: "chat_message",
   FUNCTION_RESULT: "function_result",
+  TOOL_RESULT: "tool_result",
 
   // Server to Client
   CONNECTION_ESTABLISHED: "connection_established",

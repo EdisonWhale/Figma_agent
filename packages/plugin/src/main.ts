@@ -205,8 +205,10 @@ async function handleCreateStickyNote(id: string, data: any): Promise<void> {
     id,
     success: true,
     result: {
-      stickyId: sticky.id,
-      message: `Created sticky note: "${data.text}"`,
+      elementId: sticky.id, // Standardize the field name
+      stickyId: sticky.id,  // Keep for backward compatibility
+      type: "STICKY",
+      message: `Created sticky note: "${data.text}" (ID: ${sticky.id})`,
     },
   });
 
@@ -806,6 +808,32 @@ async function handleUpdateElement(id: string, data: any): Promise<void> {
     (node as any).cornerRadius = properties.cornerRadius;
   }
 
+  // Update color property (convert color name to fills)
+  if (properties.color !== undefined && 'fills' in node) {
+    const colorMap: Record<string, RGB> = {
+      yellow: { r: 1, g: 0.9, b: 0.2 },
+      blue: { r: 0.2, g: 0.6, b: 1 },
+      green: { r: 0.2, g: 0.8, b: 0.4 },
+      pink: { r: 1, g: 0.4, b: 0.7 },
+      purple: { r: 0.7, g: 0.4, b: 1 },
+      red: { r: 1, g: 0.2, b: 0.2 },
+    };
+
+    const colorName = properties.color.toLowerCase();
+    const color = colorMap[colorName];
+    if (color) {
+      (node as any).fills = [
+        {
+          type: "SOLID",
+          color: color,
+        },
+      ];
+      console.log(`[main.ts] Updated element color to ${colorName}:`, color);
+    } else {
+      console.warn(`[main.ts] Unsupported color name: ${properties.color}. Supported colors: ${Object.keys(colorMap).join(', ')}`);
+    }
+  }
+
   // Update text-specific properties
   if (node.type === 'TEXT') {
     const textNode = node as TextNode;
@@ -823,6 +851,24 @@ async function handleUpdateElement(id: string, data: any): Promise<void> {
         type: "SOLID",
         color: properties.textColor,
       }];
+    }
+  }
+
+  // Update sticky note specific properties
+  if (node.type === 'STICKY') {
+    const stickyNode = node as StickyNode;
+    if (properties.text !== undefined) {
+      // Load font before updating text content
+      try {
+        await figma.loadFontAsync({ family: "Inter", style: "Medium" });
+      } catch (error) {
+        try {
+          await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+        } catch (error2) {
+          await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
+        }
+      }
+      stickyNode.text.characters = properties.text;
     }
   }
 
