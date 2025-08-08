@@ -166,6 +166,272 @@ const ArrangeElementsSchema = z.object({
   columns: z.number().optional().describe("Number of columns (for grid layout)"),
 });
 
+// Schema for batch sticky note creation
+const CreateStickyBatchSchema = z.object({
+  items: z.array(z.object({
+    text: z.string().describe("The text content for the sticky note"),
+    color: z.enum(['yellow', 'blue', 'green', 'pink', 'purple', 'red', 'orange', 'dark_blue', 'dark_green', 'lightRed', 'lightBlue', 'lightGreen', 'gray', 'lightGray'])
+      .optional().describe("Sticky note color from FigJam color palette"),
+    position: z.object({
+      x: z.number(),
+      y: z.number(),
+    }).optional().describe("Custom position for this sticky note")
+  })).describe("Array of sticky note configurations"),
+  layout: z.enum(['GRID', 'ROW', 'COLUMN']).optional().describe("Layout pattern for positioning (default: GRID)"),
+  spacing: z.number().optional().describe("Spacing between sticky notes (default: 20)"),
+  startPosition: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Starting position for layout (default: {x: 100, y: 100})"),
+  defaultSize: z.object({
+    width: z.number().optional(),
+    height: z.number().optional(),
+  }).optional().describe("Default size for sticky notes (default: {width: 240, height: 240})")
+});
+
+// Schema for element alignment
+const AlignElementsSchema = z.object({
+  nodeIds: z.array(z.string()).describe("Array of element IDs to align"),
+  alignment: z.enum(['LEFT', 'CENTER', 'RIGHT', 'TOP', 'MIDDLE', 'BOTTOM']).describe("Alignment type"),
+  distributeSpacing: z.number().optional().describe("Spacing for distribution (if not provided, elements are aligned without distribution)")
+});
+
+// Schema for grouping elements
+const GroupElementsSchema = z.object({
+  nodeIds: z.array(z.string()).describe("Array of element IDs to group"),
+  groupName: z.string().optional().describe("Name for the group (default: 'Group')")
+});
+
+// Schema for ungrouping elements
+const UngroupElementsSchema = z.object({
+  groupId: z.string().describe("ID of the group to ungroup")
+});
+
+// Schema for flowchart creation
+const CreateFlowchartSchema = z.object({
+  nodes: z.array(z.object({
+    id: z.string().describe("Unique identifier for the node"),
+    text: z.string().describe("Text content of the node"),
+    type: z.enum(['start', 'process', 'decision', 'end', 'data']).describe("Type of flowchart node"),
+    position: z.object({
+      x: z.number(),
+      y: z.number(),
+    }).optional().describe("Custom position for this node")
+  })).describe("Array of flowchart nodes"),
+  connections: z.array(z.object({
+    from: z.string().describe("ID of the source node"),
+    to: z.string().describe("ID of the target node"),
+    label: z.string().optional().describe("Optional label for the connection")
+  })).describe("Array of connections between nodes"),
+  layout: z.enum(['TOP_TO_BOTTOM', 'LEFT_TO_RIGHT', 'AUTO']).optional().describe("Layout direction for the flowchart (default: AUTO)"),
+  spacing: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Spacing between nodes (default: {x: 60, y: 60})"),
+  startPosition: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Starting position for the flowchart (default: {x: 200, y: 200})")
+});
+
+// Schema for mind map creation
+const CreateMindMapSchema = z.object({
+  centralTopic: z.string().describe("The central topic text of the mind map"),
+  branches: z.array(z.object({
+    text: z.string().describe("Text content of the branch"),
+    children: z.array(z.object({
+      text: z.string().describe("Text content of the child node")
+    })).optional().describe("Child nodes of this branch"),
+    color: z.enum(['yellow', 'blue', 'green', 'pink', 'purple', 'red', 'orange', 'dark_blue', 'dark_green', 'lightRed', 'lightBlue', 'lightGreen', 'gray', 'lightGray'])
+      .optional().describe("Color for this branch")
+  })).describe("Array of main branches"),
+  startPosition: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the central node (default: {x: 400, y: 300})"),
+  branchSpacing: z.number().optional().describe("Spacing between branch and child nodes (default: 100)")
+});
+
+// Schema for shape with text creation
+const CreateShapeWithTextSchema = z.object({
+  text: z.string().describe("Text content to display on the shape"),
+  shapeType: z.enum(['rectangle', 'ellipse', 'polygon', 'star']).describe("Type of shape to create"),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the shape (default: {x: 0, y: 0})"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe("Size of the shape (default: {width: 150, height: 100})"),
+  backgroundColor: z.object({
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+  }).optional().describe("Background color RGB (default: light gray)"),
+  textColor: z.object({
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+  }).optional().describe("Text color RGB (default: black)"),
+  fontSize: z.number().optional().describe("Font size (default: 14)"),
+  fontFamily: z.string().optional().describe("Font family (default: Inter)"),
+  fontWeight: z.string().optional().describe("Font weight (default: Regular)"),
+  textAlign: z.enum(['LEFT', 'CENTER', 'RIGHT']).optional().describe("Text alignment (default: CENTER)"),
+  cornerRadius: z.number().optional().describe("Corner radius for rectangles (default: 8)"),
+  pointCount: z.number().min(3).max(20).optional().describe("Number of points for polygons/stars (default: 5)"),
+  innerRadius: z.number().min(0.1).max(0.9).optional().describe("Inner radius ratio for stars (default: 0.4)")
+});
+
+// Schema for code block creation
+const CreateCodeBlockSchema = z.object({
+  code: z.string().describe("The code content to display"),
+  language: z.string().optional().describe("Programming language for syntax highlighting (default: javascript)"),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the code block (default: {x: 0, y: 0})"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe("Size of the code block (default: {width: 400, height: 300})"),
+  backgroundColor: z.object({
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+  }).optional().describe("Background color RGB (default: dark gray)"),
+  theme: z.enum(['light', 'dark']).optional().describe("Color theme (default: dark)"),
+  showLineNumbers: z.boolean().optional().describe("Whether to show line numbers (default: true)")
+});
+
+// Schema for polygon creation
+const CreatePolygonSchema = z.object({
+  pointCount: z.number().min(3).max(20).describe("Number of points for the polygon"),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the polygon (default: {x: 0, y: 0})"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe("Size of the polygon (default: {width: 100, height: 100})"),
+  fills: z.array(z.object({
+    type: z.string(),
+    color: z.object({
+      r: z.number().min(0).max(1),
+      g: z.number().min(0).max(1),
+      b: z.number().min(0).max(1),
+    })
+  })).optional().describe("Fill colors for the polygon"),
+  rotation: z.number().optional().describe("Rotation in radians (default: 0)")
+});
+
+// Schema for star creation
+const CreateStarSchema = z.object({
+  pointCount: z.number().min(3).max(20).describe("Number of points for the star"),
+  innerRadius: z.number().min(0.1).max(0.9).describe("Inner radius ratio (0.1 to 0.9)"),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the star (default: {x: 0, y: 0})"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe("Size of the star (default: {width: 100, height: 100})"),
+  fills: z.array(z.object({
+    type: z.string(),
+    color: z.object({
+      r: z.number().min(0).max(1),
+      g: z.number().min(0).max(1),
+      b: z.number().min(0).max(1),
+    })
+  })).optional().describe("Fill colors for the star"),
+  rotation: z.number().optional().describe("Rotation in radians (default: 0)")
+});
+
+// Schema for frame creation
+const CreateFrameSchema = z.object({
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the frame (default: {x: 0, y: 0})"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe("Size of the frame (default: {width: 200, height: 200})"),
+  name: z.string().optional().describe("Name for the frame (default: 'Frame')"),
+  backgroundColor: z.object({
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+  }).optional().describe("Background color RGB (default: white)"),
+  cornerRadius: z.number().optional().describe("Corner radius (default: 0)"),
+  clipContent: z.boolean().optional().describe("Whether to clip content (default: false)")
+});
+
+// Schema for section creation
+const CreateSectionSchema = z.object({
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Position for the section (default: {x: 0, y: 0})"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe("Size of the section (default: {width: 300, height: 200})"),
+  title: z.string().optional().describe("Title for the section (default: 'Section')"),
+  backgroundColor: z.object({
+    r: z.number().min(0).max(1),
+    g: z.number().min(0).max(1),
+    b: z.number().min(0).max(1),
+  }).optional().describe("Background color RGB (default: light blue)")
+});
+
+// Schema for move element operation
+const MoveElementSchema = z.object({
+  elementId: z.string().describe("ID of the element to move"),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).describe("New position for the element"),
+  relative: z.boolean().optional().describe("If true, position is relative to current position (default: false)"),
+  animate: z.boolean().optional().describe("If true, animate the movement in FigJam (default: false)")
+});
+
+// Schema for resize element operation
+const ResizeElementSchema = z.object({
+  elementId: z.string().describe("ID of the element to resize"),
+  size: z.object({
+    width: z.number(),
+    height: z.number(),
+  }).describe("New size for the element"),
+  relative: z.boolean().optional().describe("If true, size is relative to current size (default: false)"),
+  constrainProportions: z.boolean().optional().describe("If true, maintain aspect ratio (default: false)"),
+  anchorPoint: z.enum(['TOP_LEFT', 'TOP_CENTER', 'TOP_RIGHT', 'CENTER_LEFT', 'CENTER', 'CENTER_RIGHT', 'BOTTOM_LEFT', 'BOTTOM_CENTER', 'BOTTOM_RIGHT']).optional().describe("Anchor point for resizing (default: TOP_LEFT)")
+});
+
+// Schema for rotate element operation
+const RotateElementSchema = z.object({
+  elementId: z.string().describe("ID of the element to rotate"),
+  rotation: z.number().describe("Rotation angle in radians"),
+  relative: z.boolean().optional().describe("If true, rotation is relative to current rotation (default: false)"),
+  anchorPoint: z.object({
+    x: z.number(),
+    y: z.number(),
+  }).optional().describe("Custom rotation anchor point (default: element center)")
+});
+
+// Schema for tidy up operation
+const TidyUpSchema = z.object({
+  elementIds: z.array(z.string()).optional().describe("Specific element IDs to organize (if not provided, organizes all page elements)"),
+  strategy: z.enum(['AUTO', 'GRID', 'FLOW', 'CLUSTER']).optional().describe("Organization strategy (default: AUTO)"),
+  spacing: z.number().optional().describe("Minimum spacing between elements in pixels (default: 20)"),
+  alignment: z.enum(['LEFT', 'CENTER', 'RIGHT', 'TOP', 'MIDDLE', 'BOTTOM']).optional().describe("Element alignment (default: TOP)"),
+  groupSimilar: z.boolean().optional().describe("Group elements with similar properties (default: true)"),
+  removeOverlaps: z.boolean().optional().describe("Remove overlapping elements (default: true)"),
+  optimizeConnections: z.boolean().optional().describe("Optimize connector paths in FigJam (default: false)")
+});
+
 // Create MCP server
 const server = new Server(
   {
@@ -483,6 +749,249 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["elementIds", "direction"],
         },
       },
+
+      // Batch creation tools
+      {
+        name: "create_sticky_batch",
+        description: "Create multiple sticky notes in a batch with automatic layout",
+        inputSchema: {
+          type: "object",
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: { type: "string", description: "The text content for the sticky note" },
+                  color: { 
+                    type: "string", 
+                    enum: ["yellow", "blue", "green", "pink", "purple", "red", "orange", "dark_blue", "dark_green", "lightRed", "lightBlue", "lightGreen", "gray", "lightGray"],
+                    description: "Sticky note color from FigJam color palette" 
+                  },
+                  position: {
+                    type: "object",
+                    properties: {
+                      x: { type: "number" },
+                      y: { type: "number" }
+                    },
+                    description: "Custom position for this sticky note"
+                  }
+                },
+                required: ["text"]
+              },
+              description: "Array of sticky note configurations"
+            },
+            layout: {
+              type: "string",
+              enum: ["GRID", "ROW", "COLUMN"],
+              description: "Layout pattern for positioning (default: GRID)"
+            },
+            spacing: { type: "number", description: "Spacing between sticky notes (default: 20)" },
+            startPosition: {
+              type: "object",
+              properties: {
+                x: { type: "number" },
+                y: { type: "number" }
+              },
+              description: "Starting position for layout (default: {x: 100, y: 100})"
+            },
+            defaultSize: {
+              type: "object",
+              properties: {
+                width: { type: "number" },
+                height: { type: "number" }
+              },
+              description: "Default size for sticky notes (default: {width: 240, height: 240})"
+            }
+          },
+          required: ["items"]
+        }
+      },
+
+      // Layout and alignment tools  
+      {
+        name: "align_elements",
+        description: "Align multiple elements by specified alignment type",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of element IDs to align"
+            },
+            alignment: {
+              type: "string",
+              enum: ["LEFT", "CENTER", "RIGHT", "TOP", "MIDDLE", "BOTTOM"],
+              description: "Alignment type"
+            },
+            distributeSpacing: {
+              type: "number",
+              description: "Spacing for distribution (if not provided, elements are aligned without distribution)"
+            }
+          },
+          required: ["nodeIds", "alignment"]
+        }
+      },
+
+      // Grouping tools
+      {
+        name: "group_elements",
+        description: "Group multiple elements together",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of element IDs to group"
+            },
+            groupName: {
+              type: "string",
+              description: "Name for the group (default: 'Group')"
+            }
+          },
+          required: ["nodeIds"]
+        }
+      },
+      {
+        name: "ungroup_elements",
+        description: "Ungroup a group of elements",
+        inputSchema: {
+          type: "object",
+          properties: {
+            groupId: {
+              type: "string",
+              description: "ID of the group to ungroup"
+            }
+          },
+          required: ["groupId"]
+        }
+      },
+
+      // Advanced creation tools
+      {
+        name: "create_flowchart",
+        description: "Create a flowchart diagram with automatic layout and connections",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string", description: "Unique identifier for the node" },
+                  text: { type: "string", description: "Text content of the node" },
+                  type: { 
+                    type: "string", 
+                    enum: ["start", "process", "decision", "end", "data"],
+                    description: "Type of flowchart node" 
+                  },
+                  position: {
+                    type: "object",
+                    properties: {
+                      x: { type: "number" },
+                      y: { type: "number" }
+                    },
+                    description: "Custom position for this node"
+                  }
+                },
+                required: ["id", "text", "type"]
+              },
+              description: "Array of flowchart nodes"
+            },
+            connections: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  from: { type: "string", description: "ID of the source node" },
+                  to: { type: "string", description: "ID of the target node" },
+                  label: { type: "string", description: "Optional label for the connection" }
+                },
+                required: ["from", "to"]
+              },
+              description: "Array of connections between nodes"
+            },
+            layout: {
+              type: "string",
+              enum: ["TOP_TO_BOTTOM", "LEFT_TO_RIGHT", "AUTO"],
+              description: "Layout direction for the flowchart (default: AUTO)"
+            },
+            spacing: {
+              type: "object",
+              properties: {
+                x: { type: "number" },
+                y: { type: "number" }
+              },
+              description: "Spacing between nodes (default: {x: 60, y: 60})"
+            },
+            startPosition: {
+              type: "object",
+              properties: {
+                x: { type: "number" },
+                y: { type: "number" }
+              },
+              description: "Starting position for the flowchart (default: {x: 200, y: 200})"
+            }
+          },
+          required: ["nodes", "connections"]
+        }
+      },
+      {
+        name: "create_mindmap",
+        description: "Create a mind map diagram with radial layout and branches",
+        inputSchema: {
+          type: "object",
+          properties: {
+            centralTopic: {
+              type: "string",
+              description: "The central topic text of the mind map"
+            },
+            branches: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  text: { type: "string", description: "Text content of the branch" },
+                  children: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        text: { type: "string", description: "Text content of the child node" }
+                      },
+                      required: ["text"]
+                    },
+                    description: "Child nodes of this branch"
+                  },
+                  color: { 
+                    type: "string", 
+                    enum: ["yellow", "blue", "green", "pink", "purple", "red", "orange", "dark_blue", "dark_green", "lightRed", "lightBlue", "lightGreen", "gray", "lightGray"],
+                    description: "Color for this branch" 
+                  }
+                },
+                required: ["text"]
+              },
+              description: "Array of main branches"
+            },
+            startPosition: {
+              type: "object",
+              properties: {
+                x: { type: "number" },
+                y: { type: "number" }
+              },
+              description: "Position for the central node (default: {x: 400, y: 300})"
+            },
+            branchSpacing: {
+              type: "number",
+              description: "Spacing between branch and child nodes (default: 100)"
+            }
+          },
+          required: ["centralTopic", "branches"]
+        }
+      },
       
       // Analysis tools
       {
@@ -493,6 +1002,304 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {},
           required: [],
         },
+      },
+
+      // Category 1: Basic creation tools
+      {
+        name: "create_shape_with_text",
+        description: "Create a shape (rectangle, ellipse, polygon, star) with integrated text",
+        inputSchema: {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "Text content to display on the shape" },
+            shapeType: { 
+              type: "string", 
+              enum: ["rectangle", "ellipse", "polygon", "star"],
+              description: "Type of shape to create" 
+            },
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Position for the shape (default: {x: 0, y: 0})"
+            },
+            size: {
+              type: "object",
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "Size of the shape (default: {width: 150, height: 100})"
+            },
+            backgroundColor: {
+              type: "object",
+              properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } },
+              description: "Background color RGB (default: light gray)"
+            },
+            textColor: {
+              type: "object", 
+              properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } },
+              description: "Text color RGB (default: black)"
+            },
+            fontSize: { type: "number", description: "Font size (default: 14)" },
+            fontFamily: { type: "string", description: "Font family (default: Inter)" },
+            fontWeight: { type: "string", description: "Font weight (default: Regular)" },
+            textAlign: { 
+              type: "string", 
+              enum: ["LEFT", "CENTER", "RIGHT"], 
+              description: "Text alignment (default: CENTER)" 
+            },
+            cornerRadius: { type: "number", description: "Corner radius for rectangles (default: 8)" },
+            pointCount: { type: "number", description: "Number of points for polygons/stars (default: 5)" },
+            innerRadius: { type: "number", description: "Inner radius ratio for stars (default: 0.4)" }
+          },
+          required: ["text", "shapeType"]
+        }
+      },
+      {
+        name: "create_code_block",
+        description: "Create a code block with syntax highlighting styling",
+        inputSchema: {
+          type: "object",
+          properties: {
+            code: { type: "string", description: "The code content to display" },
+            language: { type: "string", description: "Programming language for syntax highlighting (default: javascript)" },
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Position for the code block (default: {x: 0, y: 0})"
+            },
+            size: {
+              type: "object",
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "Size of the code block (default: {width: 400, height: 300})"
+            },
+            backgroundColor: {
+              type: "object",
+              properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } },
+              description: "Background color RGB (default: dark gray)"
+            },
+            theme: { 
+              type: "string", 
+              enum: ["light", "dark"], 
+              description: "Color theme (default: dark)" 
+            },
+            showLineNumbers: { type: "boolean", description: "Whether to show line numbers (default: true)" }
+          },
+          required: ["code"]
+        }
+      },
+      {
+        name: "create_polygon", 
+        description: "Create a polygon shape with specified number of points",
+        inputSchema: {
+          type: "object",
+          properties: {
+            pointCount: { type: "number", description: "Number of points for the polygon (3-20)" },
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Position for the polygon (default: {x: 0, y: 0})"
+            },
+            size: {
+              type: "object",
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "Size of the polygon (default: {width: 100, height: 100})"
+            },
+            fills: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string" },
+                  color: {
+                    type: "object",
+                    properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } }
+                  }
+                }
+              },
+              description: "Fill colors for the polygon"
+            },
+            rotation: { type: "number", description: "Rotation in radians (default: 0)" }
+          },
+          required: ["pointCount"]
+        }
+      },
+      {
+        name: "create_star",
+        description: "Create a star shape with specified points and inner radius",
+        inputSchema: {
+          type: "object",
+          properties: {
+            pointCount: { type: "number", description: "Number of points for the star (3-20)" },
+            innerRadius: { type: "number", description: "Inner radius ratio (0.1 to 0.9)" },
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Position for the star (default: {x: 0, y: 0})"
+            },
+            size: {
+              type: "object",
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "Size of the star (default: {width: 100, height: 100})"
+            },
+            fills: {
+              type: "array", 
+              items: {
+                type: "object",
+                properties: {
+                  type: { type: "string" },
+                  color: {
+                    type: "object",
+                    properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } }
+                  }
+                }
+              },
+              description: "Fill colors for the star"
+            },
+            rotation: { type: "number", description: "Rotation in radians (default: 0)" }
+          },
+          required: ["pointCount", "innerRadius"]
+        }
+      },
+      {
+        name: "create_frame",
+        description: "Create a frame container for organizing elements",
+        inputSchema: {
+          type: "object", 
+          properties: {
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Position for the frame (default: {x: 0, y: 0})"
+            },
+            size: {
+              type: "object",
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "Size of the frame (default: {width: 200, height: 200})"
+            },
+            name: { type: "string", description: "Name for the frame (default: 'Frame')" },
+            backgroundColor: {
+              type: "object",
+              properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } },
+              description: "Background color RGB (default: white)"
+            },
+            cornerRadius: { type: "number", description: "Corner radius (default: 0)" },
+            clipContent: { type: "boolean", description: "Whether to clip content (default: false)" }
+          }
+        }
+      },
+      {
+        name: "create_section",
+        description: "Create a section area for organizing content (native in FigJam, frame-based in Figma)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Position for the section (default: {x: 0, y: 0})"
+            },
+            size: {
+              type: "object",
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "Size of the section (default: {width: 300, height: 200})"
+            },
+            title: { type: "string", description: "Title for the section (default: 'Section')" },
+            backgroundColor: {
+              type: "object",
+              properties: { r: { type: "number" }, g: { type: "number" }, b: { type: "number" } },
+              description: "Background color RGB (default: light blue)"
+            }
+          }
+        }
+      },
+
+      // Category 2: Advanced operations tools
+      {
+        name: "move_element",
+        description: "Move an element to a new position with optional relative movement and animation",
+        inputSchema: {
+          type: "object",
+          properties: {
+            elementId: { type: "string", description: "ID of the element to move" },
+            position: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "New position for the element"
+            },
+            relative: { type: "boolean", description: "If true, position is relative to current position (default: false)" },
+            animate: { type: "boolean", description: "If true, animate the movement in FigJam (default: false)" }
+          },
+          required: ["elementId", "position"]
+        }
+      },
+      {
+        name: "resize_element",
+        description: "Resize an element with anchor point control and proportion constraints",
+        inputSchema: {
+          type: "object",
+          properties: {
+            elementId: { type: "string", description: "ID of the element to resize" },
+            size: {
+              type: "object", 
+              properties: { width: { type: "number" }, height: { type: "number" } },
+              description: "New size for the element"
+            },
+            relative: { type: "boolean", description: "If true, size is relative to current size (default: false)" },
+            constrainProportions: { type: "boolean", description: "If true, maintain aspect ratio (default: false)" },
+            anchorPoint: { 
+              type: "string", 
+              enum: ["TOP_LEFT", "TOP_CENTER", "TOP_RIGHT", "CENTER_LEFT", "CENTER", "CENTER_RIGHT", "BOTTOM_LEFT", "BOTTOM_CENTER", "BOTTOM_RIGHT"],
+              description: "Anchor point for resizing (default: TOP_LEFT)" 
+            }
+          },
+          required: ["elementId", "size"]
+        }
+      },
+      {
+        name: "rotate_element",
+        description: "Rotate an element by a specified angle with custom anchor point support",
+        inputSchema: {
+          type: "object",
+          properties: {
+            elementId: { type: "string", description: "ID of the element to rotate" },
+            rotation: { type: "number", description: "Rotation angle in radians" },
+            relative: { type: "boolean", description: "If true, rotation is relative to current rotation (default: false)" },
+            anchorPoint: {
+              type: "object",
+              properties: { x: { type: "number" }, y: { type: "number" } },
+              description: "Custom rotation anchor point (default: element center)"
+            }
+          },
+          required: ["elementId", "rotation"]
+        }
+      },
+
+      // Category 4: Smart canvas organization
+      {
+        name: "tidy_up",
+        description: "Smart canvas organization with multiple strategies, grouping, and overlap removal",
+        inputSchema: {
+          type: "object",
+          properties: {
+            elementIds: {
+              type: "array",
+              items: { type: "string" },
+              description: "Specific element IDs to organize (if not provided, organizes all page elements)"
+            },
+            strategy: {
+              type: "string",
+              enum: ["AUTO", "GRID", "FLOW", "CLUSTER"],
+              description: "Organization strategy (default: AUTO)"
+            },
+            spacing: { type: "number", description: "Minimum spacing between elements in pixels (default: 20)" },
+            alignment: {
+              type: "string",
+              enum: ["LEFT", "CENTER", "RIGHT", "TOP", "MIDDLE", "BOTTOM"],
+              description: "Element alignment (default: TOP)"
+            },
+            groupSimilar: { type: "boolean", description: "Group elements with similar properties (default: true)" },
+            removeOverlaps: { type: "boolean", description: "Remove overlapping elements (default: true)" },
+            optimizeConnections: { type: "boolean", description: "Optimize connector paths in FigJam (default: false)" }
+          }
+        }
       },
     ],
   };
@@ -655,6 +1462,80 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "get_page_statistics":
         result = { action: toolName, data: {} };
+        break;
+
+      case "create_sticky_batch":
+        args = CreateStickyBatchSchema.parse(request.params.arguments);
+        result = {
+          action: toolName,
+          data: {
+            items: args.items,
+            layout: args.layout || 'GRID',
+            spacing: args.spacing || 20,
+            startPosition: args.startPosition || { x: 100, y: 100 },
+            defaultSize: args.defaultSize || { width: 240, height: 240 }
+          }
+        };
+        break;
+
+      case "align_elements":
+        args = AlignElementsSchema.parse(request.params.arguments);
+        result = {
+          action: toolName,
+          data: {
+            nodeIds: args.nodeIds,
+            alignment: args.alignment,
+            distributeSpacing: args.distributeSpacing
+          }
+        };
+        break;
+
+      case "group_elements":
+        args = GroupElementsSchema.parse(request.params.arguments);
+        result = {
+          action: toolName,
+          data: {
+            nodeIds: args.nodeIds,
+            groupName: args.groupName || 'Group'
+          }
+        };
+        break;
+
+      case "ungroup_elements":
+        args = UngroupElementsSchema.parse(request.params.arguments);
+        result = {
+          action: toolName,
+          data: {
+            groupId: args.groupId
+          }
+        };
+        break;
+
+      case "create_flowchart":
+        args = CreateFlowchartSchema.parse(request.params.arguments);
+        result = {
+          action: toolName,
+          data: {
+            nodes: args.nodes,
+            connections: args.connections,
+            layout: args.layout || 'AUTO',
+            spacing: args.spacing || { x: 60, y: 60 },
+            startPosition: args.startPosition || { x: 200, y: 200 }
+          }
+        };
+        break;
+
+      case "create_mindmap":
+        args = CreateMindMapSchema.parse(request.params.arguments);
+        result = {
+          action: toolName,
+          data: {
+            centralTopic: args.centralTopic,
+            branches: args.branches,
+            startPosition: args.startPosition || { x: 400, y: 300 },
+            branchSpacing: args.branchSpacing || 100
+          }
+        };
         break;
 
       default:
