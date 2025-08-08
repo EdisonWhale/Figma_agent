@@ -78,7 +78,7 @@ export async function updateConnector(options: UpdateConnectorOptions): Promise<
   try {
     // Update stroke properties
     if (strokeWeight !== undefined) {
-      connector.strokeWeight = strokeWeight;
+      connector.strokeWeight = strokeWeight as number;
       updatedProperties.push(`stroke weight: ${strokeWeight}`);
     }
 
@@ -119,13 +119,13 @@ export async function updateConnector(options: UpdateConnectorOptions): Promise<
         
         connector.connectorStart = {
           endpointNodeId: startElementId,
-          magnet: magnet
+          magnet: magnet as any
         };
         updatedProperties.push(`start element: ${startElementId}`);
       } else if (startPosition) {
         connector.connectorStart = {
           position: startPosition,
-          magnet: 'NONE'
+          magnet: 'NONE' as any
         };
         updatedProperties.push(`start position: (${startPosition.x}, ${startPosition.y})`);
       }
@@ -141,13 +141,13 @@ export async function updateConnector(options: UpdateConnectorOptions): Promise<
         
         connector.connectorEnd = {
           endpointNodeId: endElementId,
-          magnet: magnet
+          magnet: magnet as any
         };
         updatedProperties.push(`end element: ${endElementId}`);
       } else if (endPosition) {
         connector.connectorEnd = {
           position: endPosition,
-          magnet: 'NONE'
+          magnet: 'NONE' as any
         };
         updatedProperties.push(`end position: (${endPosition.x}, ${endPosition.y})`);
       }
@@ -247,7 +247,7 @@ export async function queryConnectors(options: QueryConnectorsOptions = {}): Pro
   // Filter by stroke weight
   if (strokeWeightRange) {
     allConnectors = allConnectors.filter(connector => {
-      const weight = connector.strokeWeight || 1;
+      const weight = (typeof connector.strokeWeight === 'number') ? connector.strokeWeight : 1;
       return weight >= strokeWeightRange.min && weight <= strokeWeightRange.max;
     });
     console.log(`[queryConnectors] Filtered to ${allConnectors.length} connectors by stroke weight range`);
@@ -291,7 +291,7 @@ export async function queryConnectors(options: QueryConnectorsOptions = {}): Pro
       if (endPos) info.endPosition = endPos;
 
       // Get stroke properties
-      info.strokeWeight = connector.strokeWeight;
+      info.strokeWeight = (typeof connector.strokeWeight === 'number') ? connector.strokeWeight : 1;
       
       if (connector.strokes && connector.strokes.length > 0) {
         const stroke = connector.strokes[0];
@@ -534,11 +534,11 @@ async function optimizeForShortest(connector: ConnectorNode): Promise<boolean> {
     // Use AUTO magnet for automatic shortest path
     connector.connectorStart = {
       ...connector.connectorStart,
-      magnet: "AUTO"
+      magnet: "AUTO" as any
     };
     connector.connectorEnd = {
       ...connector.connectorEnd,
-      magnet: "AUTO"
+      magnet: "AUTO" as any
     };
     return true;
   } catch (error) {
@@ -561,8 +561,8 @@ async function optimizeToAvoidOverlaps(connector: ConnectorNode, sceneNodes: Sce
     
     for (const magnet of magnetOptions) {
       // Temporarily set magnet
-      const tempStart = { ...connector.connectorStart, magnet: magnet };
-      const tempEnd = { ...connector.connectorEnd, magnet: magnet };
+      const tempStart = { ...connector.connectorStart, magnet: magnet as any };
+      const tempEnd = { ...connector.connectorEnd, magnet: magnet as any };
       
       // Count potential overlaps (simplified calculation)
       const overlaps = 0; // This would be calculated based on the path
@@ -574,8 +574,8 @@ async function optimizeToAvoidOverlaps(connector: ConnectorNode, sceneNodes: Sce
     }
     
     // Apply best option
-    connector.connectorStart = { ...connector.connectorStart, magnet: bestOption };
-    connector.connectorEnd = { ...connector.connectorEnd, magnet: bestOption };
+    connector.connectorStart = { ...connector.connectorStart, magnet: bestOption as any };
+    connector.connectorEnd = { ...connector.connectorEnd, magnet: bestOption as any };
     
     return true;
   } catch (error) {
@@ -594,8 +594,8 @@ async function optimizeForManhattan(connector: ConnectorNode, cornerRadius: numb
     }
     
     // Use specific magnets that favor Manhattan routing
-    connector.connectorStart = { ...connector.connectorStart, magnet: "RIGHT" };
-    connector.connectorEnd = { ...connector.connectorEnd, magnet: "LEFT" };
+    connector.connectorStart = { ...connector.connectorStart, magnet: "RIGHT" as any };
+    connector.connectorEnd = { ...connector.connectorEnd, magnet: "LEFT" as any };
     
     return true;
   } catch (error) {
@@ -614,8 +614,8 @@ async function optimizeForOrthogonal(connector: ConnectorNode, cornerRadius: num
     }
     
     // Use TOP/BOTTOM magnets for vertical preference
-    connector.connectorStart = { ...connector.connectorStart, magnet: "BOTTOM" };
-    connector.connectorEnd = { ...connector.connectorEnd, magnet: "TOP" };
+    connector.connectorStart = { ...connector.connectorStart, magnet: "BOTTOM" as any };
+    connector.connectorEnd = { ...connector.connectorEnd, magnet: "TOP" as any };
     
     return true;
   } catch (error) {

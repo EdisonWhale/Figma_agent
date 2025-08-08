@@ -59,6 +59,19 @@ import {
   handleTidyUp
 } from "./handlers/advanced-operations";
 
+import {
+  handleUpdateConnector,
+  handleDeleteConnector,
+  handleQueryConnectors,
+  handleOptimizeConnectorPaths
+} from "./handlers/connector-management";
+
+import {
+  handleCreateChart,
+  handleCreateDiagram,
+  handleCreateVisualization
+} from "./handlers/advanced-visualization";
+
 export default function () {
   console.log("[main.ts] Plugin Main Thread Started");
 
@@ -158,6 +171,17 @@ async function handleFigmaAPICall(msg: any): Promise<void> {
 
       // Category 4: Smart organization handlers
       "tidy_up": handleTidyUp,
+
+      // Category 3: Connector management handlers
+      "update_connector": handleUpdateConnector,
+      "delete_connector": handleDeleteConnector,
+      "query_connectors": handleQueryConnectors,
+      "optimize_connector_paths": handleOptimizeConnectorPaths,
+
+      // Category 5: Advanced visualization handlers
+      "create_chart": handleCreateChart,
+      "create_diagram": handleCreateDiagram,
+      "create_visualization": handleCreateVisualization,
     };
 
     // Dispatch to appropriate handler
