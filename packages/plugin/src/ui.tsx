@@ -13,11 +13,13 @@ import styles from "./ChatStyles.module.css";
 import { MessageBubble } from "./components/MessageBubble";
 import { ConnectionStatusIndicator } from "./components/ConnectionStatus";
 import { FigmaAPITester } from "./components/FigmaAPITester";
+import { ComprehensiveFigmaAPITester } from "./components/ComprehensiveFigmaAPITester";
 import { useChatConnection } from "./hooks";
 import { CONNECTION_STATUS, DEFAULT_MESSAGES, KEYS, isSendKeyPressed } from "./constants";
 
 function Plugin() {
   const [showAPITester, setShowAPITester] = useState(false);
+  const [useComprehensiveTester, setUseComprehensiveTester] = useState(true);
   
   const {
     messages,
@@ -76,10 +78,20 @@ function Plugin() {
     return (
       <div className={styles.pluginWrapper}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", borderBottom: "1px solid #eee" }}>
-          <Text style={{ fontWeight: "bold" }}>🧪 Figma API 测试模式</Text>
-          <Button onClick={() => setShowAPITester(false)} secondary>返回聊天</Button>
+          <Text style={{ fontWeight: "bold" }}>
+            🧪 {useComprehensiveTester ? '综合 API 测试模式' : '简单 API 测试模式'}
+          </Text>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Button 
+              onClick={() => setUseComprehensiveTester(!useComprehensiveTester)} 
+              secondary
+            >
+              {useComprehensiveTester ? '切换简单模式' : '切换综合模式'}
+            </Button>
+            <Button onClick={() => setShowAPITester(false)} secondary>返回聊天</Button>
+          </div>
         </div>
-        <FigmaAPITester />
+        {useComprehensiveTester ? <ComprehensiveFigmaAPITester /> : <FigmaAPITester />}
       </div>
     );
   }
