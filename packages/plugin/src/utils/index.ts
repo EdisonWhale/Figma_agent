@@ -1,6 +1,5 @@
 export * from "./colors";
-export * from "./jsonUtils";
-export * from "./position";
+export * from "./core-utils";
 export * from "./batch";
 export * from "./layout";
 export * from "./geometry";
